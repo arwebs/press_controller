@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="dataSourceStorageLocal">
+    <data-source name="press_controller@localhost" uuid="c0593c09-e867-4b54-bd67-143cb074e1aa">
+      <database-info product="MySQL" version="5.6.30-1+b1" jdbc-version="4.0" driver-name="MySQL Connector Java" driver-version="mysql-connector-java-5.1.40 ( Revision: 402933ef52cad9aa82624e80acbea46e3a701ce6 )">
+        <extra-name-characters>#@</extra-name-characters>
+        <identifier-quote-string>`</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="exact" quoted-identifiers="exact" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>root</user-name>
+      <introspection-schemas>*:press_controller</introspection-schemas>
+      <ssh-properties>
+        <enabled>true</enabled>
+        <proxy-host>192.168.1.64</proxy-host>
+        <proxy-port>22</proxy-port>
+        <user>pi</user>
+        <use-password>true</use-password>
+      </ssh-properties>
+    </data-source>
+  </component>
+</project>
