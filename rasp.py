@@ -33,6 +33,7 @@ lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7,
                               gpio=gpio)
 
 lcd.message('Hello\nworld!')
+time.sleep(1)
 
 # Raspberry Pi software SPI configuration.
 CLK = 18
