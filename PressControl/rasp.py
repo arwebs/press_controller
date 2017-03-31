@@ -1,5 +1,5 @@
 import time
-
+import numpy as np
 import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
 import Adafruit_MAX31855.MAX31855 as MAX31855
@@ -10,10 +10,8 @@ import Utilities
 class MainControl:
     def __init__(self):
         self.program_mode = 'Manual'
-        self.setup_lcd()
-        self.setup_spi_interfaces()
 
-    def setup_lcd(self):
+        #setting up I2C for character LCD
         lcd_rs        = 0
         lcd_en        = 1
         lcd_d4        = 2
@@ -26,35 +24,54 @@ class MainControl:
 
         lcd_columns = 20
         lcd_rows    = 4
+
         try:
             gpio = MCP.MCP23017(0x22,busnum=1)
+
             self.lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7,
                                       lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,
                                       gpio=gpio)
         except:
             print 'Using Fake LCD'
             self.lcd = Utilities.FakeLCD()  # TODO remove this and enable setup_lcd()
-    def setup_spi_interfaces(self):
+
+        #setting up SPI connected devices (temperature sensors and analog sensors)
         clk = 18
         cs_sensor_1  = 16
         cs_sensor_2 = 12
         cs_analog = 25
         data_out  = 23
         data_in = 24
-        sensor = MAX31855.MAX31855(clk, cs_sensor_1, data_out)
-        sensor2 = MAX31855.MAX31855(clk, cs_sensor_2, data_out)
-        mcp = Adafruit_MCP3008.MCP3008(clk=clk, cs=cs_analog, miso=data_out, mosi=data_in)
+        try:
+            sensor = MAX31855.MAX31855(clk, cs_sensor_1, data_out)
+            sensor2 = MAX31855.MAX31855(clk, cs_sensor_2, data_out)
+            mcp = Adafruit_MCP3008.MCP3008(clk=clk, cs=cs_analog, miso=data_out, mosi=data_in)
 
-        self.temperature_sensors = [sensor, sensor2]
-        self.analog_sensor = mcp
+            self.temperature_sensors = [sensor, sensor2]
+            self.analog_sensor = mcp
+        except:
+            print 'Could not reach temperature sensors.'
 
+        # set up I2C GPIO for LEDs
+        try:
+            self.led_gpio = MCP.MCP23017(0x20, busnum=1)
+        except:
+            print 'Could not reach LED control chip'
+
+        # set up I2C GPIO for inputs
+        try:
+            self.digital_gpio = MCP.MCP23017(0x21, busnum=1)
+        except:
+            print 'Could not reach digital input control chip'
 
     def check_program_mode(self):
+        pass
         #TODO get mode selection from input
-        print 'Checking Program State'
+        #print 'Checking Program State'
 
     def set_relays(self):
-        print "setting relays"
+        pass
+        #print "setting relays"
         #TODO set relays based on input or program state
 
     def main_control_loop(self):
@@ -85,115 +102,106 @@ class MainControl:
         while self.program_mode == 'Automatic':
             self.lcd.clear()
 
+            def get_target_slope(initial_temp, target_temp, rampup):
+                return (target_temp - initial_temp) / rampup
+
+            duration = 40*60 #TODO set this
+            rampup_time = 20*60 #TODO set this
+            max_temperature = 82 #TODO set this
+
+            myTimes = []
+            myTemps = []
+            storedTimes = []
+            storedTemps = []
+            counter = 0.
+
+            dutyCycle = 0.5
+            bufferLength = 10
+
+            initialTemp = self.temperature_sensors[0].readTempC()
+
+            isOn = False
+
+            while counter < duration:
+                temp = sensor.readTempC()
+                internal = sensor.readInternalC()
+
+                if temp != float("NAN"):
+                    myTimes.append(counter)
+                    myTemps.append(temp)
+                else:
+                    print "error reading temperature. duty cycle may be wrong"
+
+                if (counter % bufferLength) == 0 and dutyCycle > 0 and isOn == False:
+                    # TODO turn On Relay
+                    isOn = True
+
+                if (counter % bufferLength) / float(bufferLength) >= dutyCycle and isOn == True:
+                    # TODO turn Off Relay
+                    isOn = False
+
+                counter += 1.
+                #TODO Logging/persist to DB
+                #with open("temps{0}.txt".format("-s1" if args['sensor'] == '1' else "-s2"), "a") as myFile:
+                #    myFile.write('{0:0.3F}\t{1}\n'.format(temp, "1" if isOn else "0"))
+                if myTemps.__len__() == bufferLength:
+                    timeArray = np.array([myTimes, np.ones(bufferLength)])
+                    fitSlope, fitIntercept = np.linalg.lstsq(timeArray.T, myTemps)[0]
+                    targetSlope = 0
+
+                    if counter < rampup_time:
+                        targetSlope = get_target_slope(initialTemp, max_temperature, rampup_time)
+                        targetIntercept = initialTemp
+                    else:
+                        targetIntercept = max_temperature
+
+                    futureTime = counter + 15
+                    yError = (targetSlope * futureTime + targetIntercept) - (fitSlope * futureTime + fitIntercept)
+                    currentYError = (targetSlope * counter + targetIntercept) - (fitSlope * counter + fitIntercept)
+
+                    if yError > 0.25:  # increase dutyCycle if we're below target temp
+                        dutyCycle = min(dutyCycle + 0.1, 1.0)
+                    elif yError < -0.25:
+                        dutyCycle = max(dutyCycle - 0.1, 0.0)
+
+                    if currentYError < -1.0:  # if we are currently too hot, take immediate action
+                        dutyCycle = 0.0
+
+                    print('---------------------------------------------------')
+                    print('Least Squares Values: m={0:0.3F}\tb={1:0.3F}\tyError={2:0.3F}\tNewDutyCycle={3:0.2F}'.format(
+                        fitSlope, fitIntercept, yError, dutyCycle))
+                    print('---------------------------------------------------')
+                    # with open("fit{0}.txt".format("-s1" if args['sensor'] == '1' else "-s2"), "a") as myFile:
+                    #     myFile.write('{0:0.3F}\t{1:0.3F}\t{2:0.3F}\t{3:0.2F}\n'.format(fitSlope, fitIntercept, yError, dutyCycle))
+                    storedTimes += myTimes
+                    storedTemps += myTemps
+                    myTemps = []
+                    myTimes = []
+
+                print('Thermocouple Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp)))
+                #    print('    Internal Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal2, c_to_f(internal2)))
+                time.sleep(1)
+
+            #relayControl.turnOff()
+            print 'finished run, relay off'
             self.check_program_mode()
+
+class SensorState:
+    duty_cycle = 0.5
+    initial_temp = 0.
+    current_temp = 0.
+    rampup_time = 20.
+    hold_time = 20.
+    max_temp = 180.
+    def __init__(self):
+        self.duty_cycle= 0.5
+
+
 
 control = MainControl()
 while True:
     control.main_control_loop()
 
-#
-# def get_target_slope(initial_temp, target_temp, rampup):
-#     return (target_temp - initial_temp) / rampup
-#
-# class SensorState:
-#     duty_cycle = 0.5
-#     initial_temp = 0.
-#     current_temp = 0.
-#     rampup_time = 20.
-#     hold_time = 20.
-#     max_temp = 180.
-#     def __init__(self):
-#         self.duty_cycle= 0.5
-#
-#
-#
-# parser = ap.ArgumentParser(description='Temperature controller')
-# parser.add_argument('-s', '--sensor', help='Sensor', required=False)
-# parser.add_argument('-t', '--temperature', help='Maximum Temperature, degrees C', required=False)
-# parser.add_argument('-d', '--duration', help='Duration of run in seconds', required=False)
-# parser.add_argument('-r', '--rampup', help='Time to ramp up to temperature in seconds', required=False)
-# args = vars(parser.parse_args())
-# print args
-#
-# CLK = 25
-# DO = 18
-#
-# sensors = [MAX31855.MAX31855(CLK, 24, DO), MAX31855.MAX31855(CLK, 28, DO) ]
-#
-# myTimes = []
-# myTemps = []
-# storedTimes = []
-# storedTemps = []
-# counter = 0.
-#
-# dutyCycle = 0.5
-# bufferLength = 10
-#
-# initialTemp = sensors[0].readTempC()
-#
-# isOn = False
-#
-# while counter < int(args['duration']):
-#     temp = sensor.readTempC()
-#     internal = sensor.readInternalC()
-#
-#     if temp != float("NAN"):
-#         myTimes.append(counter)
-#         myTemps.append(temp)
-#     else:
-#         print "error reading temperature. duty cycle may be wrong"
-#
-#     if (counter % bufferLength) == 0 and dutyCycle > 0 and isOn == False:
-#         # TODO turn On Relay
-#         isOn = True
-#
-#     if (counter % bufferLength) / float(bufferLength) >= dutyCycle and isOn == True:
-#         # TODO turn Off Relay
-#         isOn = False
-#
-#     counter += 1.
-#     with open("temps{0}.txt".format("-s1" if args['sensor'] == '1' else "-s2"), "a") as myFile:
-#         myFile.write('{0:0.3F}\t{1}\n'.format(temp, "1" if isOn else "0"))
-#     if myTemps.__len__() == bufferLength:
-#         timeArray = np.array([myTimes, np.ones(bufferLength)])
-#         fitSlope, fitIntercept = np.linalg.lstsq(timeArray.T, myTemps)[0]
-#         targetSlope = 0
-#         targetIntercept = 0
-#
-#         if counter < float(args['rampup']):
-#             targetSlope = get_target_slope(initialTemp, float(args['temperature']), int(args['rampup']))
-#             targetIntercept = initialTemp
-#         else:
-#             targetIntercept = float(args['temperature'])
-#
-#         futureTime = counter + 15
-#         yError = (targetSlope * futureTime + targetIntercept) - (fitSlope * futureTime + fitIntercept)
-#         currentYError = (targetSlope * counter + targetIntercept) - (fitSlope * counter + fitIntercept)
-#
-#         if yError > 0.25:  # increase dutyCycle if we're below target temp
-#             dutyCycle = min(dutyCycle + 0.1, 1.0)
-#         elif yError < -0.25:
-#             dutyCycle = max(dutyCycle - 0.1, 0.0)
-#
-#         if currentYError < -1.0:  # if we are currently too hot, take immediate action
-#             dutyCycle = 0.0
-#
-#         print('---------------------------------------------------')
-#         print('Sensor {4}: Least Squares Values: m={0:0.3F}\tb={1:0.3F}\tyError={2:0.3F}\tNewDutyCycle={3:0.2F}'.format(
-#             fitSlope, fitIntercept, yError, dutyCycle, args['sensor']))
-#         print('---------------------------------------------------')
-#         with open("fit{0}.txt".format("-s1" if args['sensor'] == '1' else "-s2"), "a") as myFile:
-#             myFile.write('{0:0.3F}\t{1:0.3F}\t{2:0.3F}\t{3:0.2F}\n'.format(fitSlope, fitIntercept, yError, dutyCycle))
-#         x = np.arange((counter - bufferLength), counter, 1)
-#
-#         storedTimes += myTimes
-#         storedTemps += myTemps
-#         myTemps = []
-#         myTimes = []
-#
-#     print('Sensor {2}: Thermocouple Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, c_to_f(temp), args['sensor']))
-#     #    print('    Internal Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal2, c_to_f(internal2)))
-#     time.sleep(1)
-#
-# relayControl.turnOff()
-# print 'finished run, relay off'
+
+
+
