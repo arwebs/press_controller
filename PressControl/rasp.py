@@ -1,11 +1,16 @@
 import time
 import numpy as np
+import ConfigParser
 import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
 import Adafruit_MAX31855.MAX31855 as MAX31855
 import Adafruit_MCP3008
 
 import Utilities
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 class MainControl:
     def __init__(self):
@@ -75,7 +80,7 @@ class MainControl:
         #TODO set relays based on input or program state
 
     def main_control_loop(self):
-        while self.program_mode == 'Manual':
+        if self.program_mode == 'Manual':
             self.lcd.clear()
             for i, sensor in enumerate(self.temperature_sensors):
                 temp = sensor.readTempC()
@@ -92,14 +97,11 @@ class MainControl:
             self.lcd.message('\n\nPot: {0}'.format(values[0]))
             time.sleep(2.0)
             self.set_relays()
-            self.check_program_mode()
 
-        while self.program_mode == 'Configure':
+        if self.program_mode == 'Configure':
             self.lcd.clear()
 
-            self.check_program_mode()
-
-        while self.program_mode == 'Automatic':
+        if self.program_mode == 'Automatic':
             self.lcd.clear()
 
             def get_target_slope(initial_temp, target_temp, rampup):
@@ -184,7 +186,7 @@ class MainControl:
 
             #relayControl.turnOff()
             print 'finished run, relay off'
-            self.check_program_mode()
+        self.check_program_mode()
 
 class SensorState:
     duty_cycle = 0.5
@@ -197,11 +199,48 @@ class SensorState:
         self.duty_cycle= 0.5
 
 
+Config = ConfigParser.ConfigParser()
+Config.read('./PressControl/.press_config')
+conn_string = Config.get('ConnectionStrings','ConnectionString')
 
-control = MainControl()
-while True:
-    control.main_control_loop()
+#control = MainControl()
+#while True:
+#    control.main_control_loop()
 
 
+engine = create_engine(conn_string, isolation_level="READ UNCOMMITTED")
+Base = declarative_base(engine)
 
+########################################################################
+class Configuration(Base):
+    """"""
+    __tablename__ = 'Configuration'
+    __table_args__ = {'autoload': True}
+class FitLog(Base):
+    """"""
+    __tablename__ = 'FitLog'
+    __table_args__ = {'autoload': True}
+class RawLog(Base):
+    """"""
+    __tablename__ = 'RawLog'
+    __table_args__ = {'autoload': True}
+class RunInformation(Base):
+    """"""
+    __tablename__ = 'RunInformation'
+    __table_args__ = {'autoload': True}
+# ----------------------------------------------------------------------
+def loadSession():
+    """"""
+    metadata = Base.metadata
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    return session
 
+if __name__ == "__main__":
+    session = loadSession()
+    res = session.query(Configuration).all()
+    # config = Configuration(TotalDuration=2200,TopRampUpTime=1000,BottomRampUpTime=1000,
+    #                        TopTemperature=80,BottomTemperature=80)
+    # session.add(config)
+    # session.commit()
+    print res[0].Id
