@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import ConfigParser
+import os.path
 import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
 import Adafruit_MAX31855.MAX31855 as MAX31855
@@ -98,10 +99,10 @@ class MainControl:
             time.sleep(2.0)
             self.set_relays()
 
-        if self.program_mode == 'Configure':
+        elif self.program_mode == 'Configure':
             self.lcd.clear()
 
-        if self.program_mode == 'Automatic':
+        elif self.program_mode == 'Automatic':
             self.lcd.clear()
 
             def get_target_slope(initial_temp, target_temp, rampup):
@@ -125,8 +126,8 @@ class MainControl:
             isOn = False
 
             while counter < duration:
-                temp = sensor.readTempC()
-                internal = sensor.readInternalC()
+                temp = self.temperature_sensors[0].readTempC()
+                internal = self.temperature_sensors[0].readInternalC()
 
                 if temp != float("NAN"):
                     myTimes.append(counter)
@@ -198,10 +199,18 @@ class SensorState:
     def __init__(self):
         self.duty_cycle= 0.5
 
-
-Config = ConfigParser.ConfigParser()
-Config.read('./PressControl/.press_config')
-conn_string = Config.get('ConnectionStrings','ConnectionString')
+config_path = './PressControl/.press_config'
+if os.path.isfile(config_path):
+    Config = ConfigParser.ConfigParser()
+    Config.read(config_path)
+    try:
+        conn_string = Config.get('ConnectionStrings','ConnectionString')
+    except:
+        print 'Error reading configuration file.  Expected Section "ConnectionStrings" and Expected Key: "ConnectionString"'
+        exit()
+else:
+    print 'Configuration file not found, expected at ' + config_path
+    exit()
 
 #control = MainControl()
 #while True:
