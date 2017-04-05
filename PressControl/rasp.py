@@ -10,6 +10,7 @@ import Adafruit_MCP3008
 import Utilities
 from LedOutputs import LedOutputs
 from DigitalInputs import DigitalInputs
+from CharLcdOutput import CharLcdOutput
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -19,30 +20,7 @@ class MainControl:
     def __init__(self):
         self.program_mode = 'Manual'
         self.previous_program_mode = 'Manual'
-        #setting up I2C for character LCD
-        lcd_rs        = 0
-        lcd_en        = 1
-        lcd_d4        = 2
-        lcd_d5        = 3
-        lcd_d6        = 4
-        lcd_d7        = 5
-        lcd_red       = 6
-        lcd_green     = 7
-        lcd_blue      = 8
-
-        lcd_columns = 20
-        lcd_rows    = 4
-
-        try:
-            gpio = MCP.MCP23017(0x22,busnum=1)
-
-            self.lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7,
-                                      lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,
-                                      gpio=gpio)
-        except:
-            print 'Using Fake LCD'
-            self.lcd = Utilities.FakeLCD()
-
+        self.lcd = CharLcdOutput.setup_char_lcd()
         #setting up SPI connected devices (temperature sensors and analog sensors)
         clk = 18
         cs_sensor_1  = 16
@@ -58,7 +36,7 @@ class MainControl:
             self.temperature_sensors = [sensor, sensor2]
             self.analog_sensor = mcp
         except:
-            print 'Could not reach temperature sensors.'
+            print 'Could not reach temperature sensors or analog sensor.'
 
         # set up I2C GPIO for LEDs
         try:
@@ -102,7 +80,7 @@ class MainControl:
                 values[sensor] = self.analog_sensor.read_adc(sensor)
             print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
             self.lcd.message('\n\nPot: {0}'.format(values[0]))
-            time.sleep(2.0)
+            time.sleep(1.0)
             self.set_relays()
 
         elif self.program_mode == 'Configure':
@@ -205,7 +183,8 @@ class SensorState:
     def __init__(self):
         self.duty_cycle= 0.5
 
-config_path = './PressControl/.press_config'
+config_path = './pywork/.press_config'
+print os.getcwd()
 if os.path.isfile(config_path):
     Config = ConfigParser.ConfigParser()
     Config.read(config_path)
