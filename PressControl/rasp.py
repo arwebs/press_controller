@@ -8,6 +8,8 @@ import Adafruit_MAX31855.MAX31855 as MAX31855
 import Adafruit_MCP3008
 
 import Utilities
+from LedOutputs import LedOutputs
+from DigitalInputs import DigitalInputs
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -16,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 class MainControl:
     def __init__(self):
         self.program_mode = 'Manual'
-
+        self.previous_program_mode = 'Manual'
         #setting up I2C for character LCD
         lcd_rs        = 0
         lcd_en        = 1
@@ -39,7 +41,7 @@ class MainControl:
                                       gpio=gpio)
         except:
             print 'Using Fake LCD'
-            self.lcd = Utilities.FakeLCD()  # TODO remove this and enable setup_lcd()
+            self.lcd = Utilities.FakeLCD()
 
         #setting up SPI connected devices (temperature sensors and analog sensors)
         clk = 18
@@ -81,6 +83,10 @@ class MainControl:
         #TODO set relays based on input or program state
 
     def main_control_loop(self):
+        if self.program_mode != self.previous_program_mode:
+            pass
+            # handle state changes first
+
         if self.program_mode == 'Manual':
             self.lcd.clear()
             for i, sensor in enumerate(self.temperature_sensors):
@@ -125,7 +131,7 @@ class MainControl:
 
             isOn = False
 
-            while counter < duration:
+            while counter < duration: #TODO need to refactor such that this doesn't block main control loop
                 temp = self.temperature_sensors[0].readTempC()
                 internal = self.temperature_sensors[0].readInternalC()
 
@@ -184,9 +190,9 @@ class MainControl:
                 print('Thermocouple Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp)))
                 #    print('    Internal Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal2, c_to_f(internal2)))
                 time.sleep(1)
-
-            #relayControl.turnOff()
+            # relayControl.turnOff()
             print 'finished run, relay off'
+
         self.check_program_mode()
 
 class SensorState:
@@ -212,44 +218,46 @@ else:
     print 'Configuration file not found, expected at ' + config_path
     exit()
 
-#control = MainControl()
-#while True:
-#    control.main_control_loop()
+control = MainControl()
+while True:
+    DigitalInputs.read_inputs()
+    control.main_control_loop()
+    LedOutputs.set_outputs()
 
 
-engine = create_engine(conn_string, isolation_level="READ UNCOMMITTED")
-Base = declarative_base(engine)
-
-########################################################################
-class Configuration(Base):
-    """"""
-    __tablename__ = 'Configuration'
-    __table_args__ = {'autoload': True}
-class FitLog(Base):
-    """"""
-    __tablename__ = 'FitLog'
-    __table_args__ = {'autoload': True}
-class RawLog(Base):
-    """"""
-    __tablename__ = 'RawLog'
-    __table_args__ = {'autoload': True}
-class RunInformation(Base):
-    """"""
-    __tablename__ = 'RunInformation'
-    __table_args__ = {'autoload': True}
-# ----------------------------------------------------------------------
-def loadSession():
-    """"""
-    metadata = Base.metadata
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    return session
-
-if __name__ == "__main__":
-    session = loadSession()
-    res = session.query(Configuration).all()
-    # config = Configuration(TotalDuration=2200,TopRampUpTime=1000,BottomRampUpTime=1000,
-    #                        TopTemperature=80,BottomTemperature=80)
-    # session.add(config)
-    # session.commit()
-    print res[0].Id
+# engine = create_engine(conn_string, isolation_level="READ UNCOMMITTED")
+# Base = declarative_base(engine)
+#
+# ########################################################################
+# class Configuration(Base):
+#     """"""
+#     __tablename__ = 'Configuration'
+#     __table_args__ = {'autoload': True}
+# class FitLog(Base):
+#     """"""
+#     __tablename__ = 'FitLog'
+#     __table_args__ = {'autoload': True}
+# class RawLog(Base):
+#     """"""
+#     __tablename__ = 'RawLog'
+#     __table_args__ = {'autoload': True}
+# class RunInformation(Base):
+#     """"""
+#     __tablename__ = 'RunInformation'
+#     __table_args__ = {'autoload': True}
+# # ----------------------------------------------------------------------
+# def loadSession():
+#     """"""
+#     metadata = Base.metadata
+#     Session = sessionmaker(bind=engine)
+#     session = Session()
+#     return session
+#
+# if __name__ == "__main__":
+#     session = loadSession()
+#     res = session.query(Configuration).all()
+#     # config = Configuration(TotalDuration=2200,TopRampUpTime=1000,BottomRampUpTime=1000,
+#     #                        TopTemperature=80,BottomTemperature=80)
+#     # session.add(config)
+#     # session.commit()
+#     print res[0].Id
