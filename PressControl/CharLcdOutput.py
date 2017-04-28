@@ -8,15 +8,15 @@ class CharLcdOutput:
     @staticmethod
     def setup_char_lcd():
         # setting up I2C for character LCD
-        lcd_rs = 0
-        lcd_en = 1
-        lcd_d4 = 2
-        lcd_d5 = 3
-        lcd_d6 = 4
-        lcd_d7 = 5
-        lcd_red = 6
-        lcd_green = 7
-        lcd_blue = 8
+        lcd_rs = 8
+        lcd_en = 10
+        lcd_d4 = 4
+        lcd_d5 = 5
+        lcd_d6 = 6
+        lcd_d7 = 7
+        lcd_red = 13
+        lcd_green = 14
+        lcd_blue = 15
 
         lcd_columns = 20
         lcd_rows = 4

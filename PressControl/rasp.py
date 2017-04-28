@@ -6,10 +6,11 @@ import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
 import Adafruit_MAX31855.MAX31855 as MAX31855
 import Adafruit_MCP3008
+import RPi.GPIO as GPIO
 
 import Utilities
-from LedOutputs import LedOutputs
-from DigitalInputs import DigitalInputs
+import LedOutputs
+import DigitalInputs
 from CharLcdOutput import CharLcdOutput
 
 from sqlalchemy import create_engine
@@ -22,12 +23,24 @@ class MainControl:
         self.previous_program_mode = 'Manual'
         self.lcd = CharLcdOutput.setup_char_lcd()
         #setting up SPI connected devices (temperature sensors and analog sensors)
-        clk = 18
-        cs_sensor_1  = 16
-        cs_sensor_2 = 12
-        cs_analog = 25
-        data_out  = 23
-        data_in = 24
+        clk = 11
+        cs_sensor_1  = 24
+        cs_sensor_2 = 26
+        cs_analog = 8
+        data_out  = 9
+        data_in = 10
+
+        # set I2C reset pin high so we can see those devices
+        i2c_reset = 21
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(i2c_reset, GPIO.OUT)
+        GPIO.output(i2c_reset, True)
+
+        # set spi selector high so that we can engage the A2D chip
+        analog_spi_select = 17
+        GPIO.setup(analog_spi_select, GPIO.OUT)
+        GPIO.output(analog_spi_select, True)
+
         try:
             sensor = MAX31855.MAX31855(clk, cs_sensor_1, data_out)
             sensor2 = MAX31855.MAX31855(clk, cs_sensor_2, data_out)
@@ -41,6 +54,15 @@ class MainControl:
         # set up I2C GPIO for LEDs
         try:
             self.led_gpio = MCP.MCP23017(0x20, busnum=1)
+            for i in range(0,16):
+                self.led_gpio.output(i, True) #True is OFF, False is ON
+                time.sleep(0.2)
+            time.sleep(2)
+            for i in range(0,16):
+                self.led_gpio.output(i, False) #True is OFF, False is ON
+                time.sleep(0.1)
+
+
         except:
             print 'Could not reach LED control chip'
 
@@ -200,6 +222,8 @@ else:
 control = MainControl()
 while True:
     DigitalInputs.read_inputs()
+    #AnalogInputs.read_inputs()
+    #TemperatureSensors.read_inputs()
     control.main_control_loop()
     LedOutputs.set_outputs()
 
