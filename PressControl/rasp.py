@@ -55,11 +55,12 @@ class MainControl:
         try:
             self.led_gpio = MCP.MCP23017(0x20, busnum=1)
             for i in range(0,16):
-                self.led_gpio.output(i, True) #True is OFF, False is ON
+                self.led_gpio.setup(i, GPIO.OUT)
+                self.led_gpio.output(i, GPIO.HIGH) #True is HIGH is OFF, False is LOW is ON
                 time.sleep(0.2)
             time.sleep(2)
             for i in range(0,16):
-                self.led_gpio.output(i, False) #True is OFF, False is ON
+                self.led_gpio.output(i, GPIO.LOW) #True is HIGH is OFF, False is LOW is ON
                 time.sleep(0.1)
 
 
@@ -69,6 +70,13 @@ class MainControl:
         # set up I2C GPIO for inputs
         try:
             self.digital_gpio = MCP.MCP23017(0x21, busnum=1)
+            for i in range(0,4):
+                self.digital_gpio.output(i,GPIO.HIGH)
+            for i in range(4,16):
+                self.digital_gpio.setup(i, GPIO.IN)
+                self.digital_gpio.pullup(i, True)
+
+
         except:
             print 'Could not reach digital input control chip'
 
@@ -101,6 +109,9 @@ class MainControl:
                 # The read_ad function will get the value of the specified channel (0-7).
                 values[sensor] = self.analog_sensor.read_adc(sensor)
             print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
+            for i in range(0,16):
+                print self.digital_gpio.input(i)
+
             self.lcd.message('\n\nPot: {0}'.format(values[0]))
             time.sleep(1.0)
             self.set_relays()
