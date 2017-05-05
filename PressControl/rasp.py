@@ -24,8 +24,8 @@ class MainControl:
         self.lcd = CharLcdOutput.setup_char_lcd()
         #setting up SPI connected devices (temperature sensors and analog sensors)
         clk = 11
-        cs_sensor_1  = 24
-        cs_sensor_2 = 26
+        cs_sensor_1  = 7
+        cs_sensor_2 = 7
         cs_analog = 8
         data_out  = 9
         data_in = 10
@@ -39,6 +39,8 @@ class MainControl:
         # set spi selector high so that we can engage the A2D chip
         analog_spi_select = 17
         GPIO.setup(analog_spi_select, GPIO.OUT)
+        GPIO.setup(27, GPIO.OUT)
+        GPIO.setup(22, GPIO.OUT)
         GPIO.output(analog_spi_select, True)
 
         try:
@@ -57,11 +59,11 @@ class MainControl:
             for i in range(0,16):
                 self.led_gpio.setup(i, GPIO.OUT)
                 self.led_gpio.output(i, GPIO.HIGH) #True is HIGH is OFF, False is LOW is ON
-                time.sleep(0.2)
+                #time.sleep(0.2)
             time.sleep(2)
             for i in range(0,16):
                 self.led_gpio.output(i, GPIO.LOW) #True is HIGH is OFF, False is LOW is ON
-                time.sleep(0.1)
+                #time.sleep(0.1)
 
 
         except:
@@ -97,18 +99,33 @@ class MainControl:
 
         if self.program_mode == 'Manual':
             self.lcd.clear()
-            for i, sensor in enumerate(self.temperature_sensors):
-                temp = sensor.readTempC()
-                internal = sensor.readInternalC()
-                print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
-                print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
-                self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
+            GPIO.output(22, True)
+            i = 0
+            sensor = self.temperature_sensors[i]
+            temp = sensor.readTempC()
+            internal = sensor.readInternalC()
+            print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
+            print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
+            self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
+            GPIO.output(22, False)
+            GPIO.output(27, True)
+            i = 1
+            sensor = self.temperature_sensors[i]
+            temp = sensor.readTempC()
+            internal = sensor.readInternalC()
+            print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
+            print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
+            self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
+            GPIO.output(27, False)
 
+            analog_spi_select = 17
+            GPIO.output(analog_spi_select, True)
             values = [0] * 8
             for sensor in range(8):
                 # The read_ad function will get the value of the specified channel (0-7).
                 values[sensor] = self.analog_sensor.read_adc(sensor)
             print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
+            GPIO.output(analog_spi_select, False)
             for i in range(0,16):
                 print self.digital_gpio.input(i)
 
