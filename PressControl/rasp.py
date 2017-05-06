@@ -93,43 +93,46 @@ class MainControl:
         #TODO set relays based on input or program state
 
     def main_control_loop(self):
+        temp, temp1, analog_input_values, digital_input_values = self.get_all_inputs()
+        DigitalInputs.update_input_values(digital_input_values)
         if self.program_mode != self.previous_program_mode:
             pass
             # handle state changes first
 
         if self.program_mode == 'Manual':
-            self.lcd.clear()
-            GPIO.output(22, True)
-            i = 0
-            sensor = self.temperature_sensors[i]
-            temp = sensor.readTempC()
-            internal = sensor.readInternalC()
-            print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
-            print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
-            self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
-            GPIO.output(22, False)
-            GPIO.output(27, True)
-            i = 1
-            sensor = self.temperature_sensors[i]
-            temp = sensor.readTempC()
-            internal = sensor.readInternalC()
-            print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
-            print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
-            self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
-            GPIO.output(27, False)
+            #self.lcd.clear()
+            # GPIO.output(22, True)
+            # i = 0
+            # sensor = self.temperature_sensors[i]
+            # temp = sensor.readTempC()
+            # internal = sensor.readInternalC()
+            # print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
+            # print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
+            # self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
+            # GPIO.output(22, False)
+            # GPIO.output(27, True)
+            # i = 1
+            # sensor = self.temperature_sensors[i]
+            # temp = sensor.readTempC()
+            # internal = sensor.readInternalC()
+            # print('Thermocouple {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(temp, Utilities.c_to_f(temp), i))
+            # print('    Internal {2} Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal, Utilities.c_to_f(internal), i))
+            # self.lcd.message('T{2}:{0:0.2F}*C/{1:0.2F}*F\n'.format(internal, Utilities.c_to_f(internal), i))
+            # GPIO.output(27, False)
+            #
+            # analog_spi_select = 17
+            # GPIO.output(analog_spi_select, True)
+            # values = [0] * 16
+            # for sensor in range(8):
+            #     # The read_ad function will get the value of the specified channel (0-7).
+            #     values[sensor] = self.analog_sensor.read_adc(sensor)
+            # print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
+            # GPIO.output(analog_spi_select, False)
+            # for i in range(16):
+            #     values[i] = self.digital_gpio.input(i)
+            # print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
+            # print('| {8:>4} | {9:>4} | {10:>4} | {11:>4} | {12:>4} | {13:>4} | {14:>4} | {15:>4} |'.format(*values))
 
-            analog_spi_select = 17
-            GPIO.output(analog_spi_select, True)
-            values = [0] * 8
-            for sensor in range(8):
-                # The read_ad function will get the value of the specified channel (0-7).
-                values[sensor] = self.analog_sensor.read_adc(sensor)
-            print('| {0:>4} | {1:>4} | {2:>4} | {3:>4} | {4:>4} | {5:>4} | {6:>4} | {7:>4} |'.format(*values))
-            GPIO.output(analog_spi_select, False)
-            for i in range(0,16):
-                print self.digital_gpio.input(i)
-
-            self.lcd.message('\n\nPot: {0}'.format(values[0]))
             time.sleep(1.0)
             self.set_relays()
 
@@ -222,6 +225,32 @@ class MainControl:
             print 'finished run, relay off'
 
         self.check_program_mode()
+
+    def get_all_inputs(self):
+        GPIO.output(22, True)
+        i = 0
+        sensor = self.temperature_sensors[i]
+        temp = sensor.readTempC()
+        # internal = sensor.readInternalC()
+        GPIO.output(22, False)
+        GPIO.output(27, True)
+        i = 1
+        sensor = self.temperature_sensors[i]
+        temp1 = sensor.readTempC()
+        # internal1 = sensor.readInternalC()
+        GPIO.output(27, False)
+        analog_spi_select = 17
+        GPIO.output(analog_spi_select, True)
+        analog_input_values = [0] * 8
+        for sensor in range(8):
+            # The read_ad function will get the value of the specified channel (0-7).
+            analog_input_values[sensor] = self.analog_sensor.read_adc(sensor)
+        GPIO.output(analog_spi_select, False)
+        digital_input_values = [0] * 16
+        for i in range(16):
+            digital_input_values[i] = self.digital_gpio.input(i)
+
+        return temp, temp1, analog_input_values, digital_input_values
 
 class SensorState:
     duty_cycle = 0.5
