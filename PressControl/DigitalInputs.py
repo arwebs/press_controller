@@ -1,3 +1,5 @@
+import LedOutputs
+
 start_button = False
 stop_button = False
 auto_mode = True
@@ -38,17 +40,23 @@ def update_input_values(digital_input_values):
     start_button = not digital_input_values[4]
     stop_button = not digital_input_values[5]
     manual_mode = not digital_input_values[7]
+    LedOutputs.manual_mode_active = manual_mode
     auto_mode = digital_input_values[6] and digital_input_values[7]
     config_mode = not digital_input_values[6]
+    LedOutputs.configuration_mode_active = config_mode
     bottom_heat_blanket_auto = digital_input_values[14] and digital_input_values[15]
     bottom_heat_blanket_off = not digital_input_values[14]
     bottom_heat_blanket_on = not digital_input_values[15]
+    LedOutputs.bottom_heat_blanket_status = LedOutputs.bottom_heat_blanket_status or bottom_heat_blanket_on
     top_heat_blanket_auto = digital_input_values[8] and digital_input_values[9]
     top_heat_blanket_off = not digital_input_values[8]
     top_heat_blanket_on = not digital_input_values[9]
+    LedOutputs.top_heat_blanket_status = LedOutputs.top_heat_blanket_status or top_heat_blanket_on
     intake_solenoid_auto = digital_input_values[10] and digital_input_values[11]
     intake_solenoid_off = not digital_input_values[10]
     intake_solenoid_on = not digital_input_values[11]
+    LedOutputs.intake_solenoid_status = LedOutputs.intake_solenoid_status or intake_solenoid_on
     exhaust_solenoid_auto = digital_input_values[12] and digital_input_values[13]
     exhaust_solenoid_off = not digital_input_values[13]
     exhaust_solenoid_on = not digital_input_values[12]
+    LedOutputs.exhaust_solenoid_status = LedOutputs.exhaust_solenoid_status or exhaust_solenoid_on

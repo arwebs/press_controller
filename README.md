@@ -21,3 +21,22 @@ Control logic for ski press.  Includes a poor-man's PID along with ability to co
 * 4x20 Character LCD -- display status 
 * 16 LEDs -- also display status
 * Solid State Relays -- control heat blankets and solenoids for air bladders
+## Getting Started
+To run on a fresh install of Raspbian:
+```sudo apt-get update
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get install git build-essential python-dev python-pip python-smbus git
+sudo pip install RPi.GPIO
+
+    cd ~
+    git clone https://github.com/adafruit/Adafruit_Python_CharLCD.git
+    git clone https://github.com/adafruit/Adafruit_Python_MAX31855.git
+    git clone https://github.com/adafruit/Adafruit_Python_MCP3008.git
+    cd Adafruit_Python_CharLCD
+    sudo python setup.py install
+    cd ../Adafruit_Python_MAX31855
+    sudo python setup.py install
+    cd ../Adafruit_Python_MCP3008
+    sudo python setup.py install
+```

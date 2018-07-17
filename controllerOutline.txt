@@ -1,0 +1,92 @@
+Setup pins
+Setup sensors
+
+main control loop
+	check all sensors
+		read temperatures
+		read pressure
+		read board inputs
+		verify nothing is urgently wrong (Temp/pressure above cutoff)
+		set sensor data (in memory)
+	read all inputs
+		verify nothing is urgently wrong (E-stop)
+	get current state
+		if changed & dirty
+			call previousState.leaveState
+		if changed & clean
+			call currentState.enterState
+	set power LEDs
+	
+	if state is:
+		Startup
+			EnterStartup:
+				Display welcome
+				Verify sensors and pins
+				Flash all LEDs
+				Set state to input selected state
+				verify set all relays off
+			ExitStartup:
+				continue
+		Setup
+			EnterSetup:
+				set min/max pot values (maybe just hardcoded)
+					min temp 120, max temp 200
+					min time 10 max time 60
+					max pressure 90psi
+				verify set all relays off
+			ExitSetup:
+				Display profile ID
+				Confirm save?
+				Green - yes, red - no
+				hold dirty state until response
+			SaveSetup:
+				Grab pots values, save to db
+				use switches to set profile mode
+			InStartup:
+				Display Pots readings
+		Manual
+			EnterManual:
+				record run number & start time
+			ExitManual:
+				turn off all relays
+				update run metadata
+			InManual:
+				Set relays according to switches
+				Display Temps & pressure
+				Record temps & pressure
+		Automatic
+			EnterAutomatic:
+				Set auto-state to Initializing
+			ExitAutomatic:
+				Verify state != running
+				if running, hold in dirty state
+			InAutomatic:
+				Initializing
+					prompt for select run profile
+					wait for green button press
+				Starting
+					pressurize bladders
+					record run start time, profile (persist in log format so if profile changes in the future we still have record of exact run parameters)
+					if red button pressed, log and skip to finished/stopped
+					if necessary, prompt to set overrides to auto
+					await green button press (allow for pressure override)
+				Running
+					take profile parameters and run to spec
+					set relay indicator leds
+						cold, good, hot
+					log temperature/pressure
+					check for manual override (off/auto/on)
+					if red button pressed, log and skip to finished/stopped
+				Finished/Stopped
+					turn off heat relays
+					vent air until pressure is down
+					green button press loops back to Initializing
+		Error
+			EnterError:
+				turn on error light
+				turn off all relays(unless pressure issue, then open relief valve)
+				Display message
+			ExitError:
+				hold dirty until reset button press
+			InError:
+				blink error light

@@ -19,8 +19,9 @@ from sqlalchemy.orm import sessionmaker
 
 class MainControl:
     def __init__(self):
-        self.program_mode = 'Manual'
-        self.previous_program_mode = 'Manual'
+        self.program_mode = 'Startup'
+        self.mode_state = 'Startup'
+        self.previous_program_mode = 'Startup'
         self.lcd = CharLcdOutput.setup_char_lcd()
         #setting up SPI connected devices (temperature sensors and analog sensors)
         clk = 11
@@ -46,6 +47,7 @@ class MainControl:
         try:
             sensor = MAX31855.MAX31855(clk, cs_sensor_1, data_out)
             sensor2 = MAX31855.MAX31855(clk, cs_sensor_2, data_out)
+
             mcp = Adafruit_MCP3008.MCP3008(clk=clk, cs=cs_analog, miso=data_out, mosi=data_in)
 
             self.temperature_sensors = [sensor, sensor2]
@@ -83,8 +85,10 @@ class MainControl:
             print 'Could not reach digital input control chip'
 
     def check_program_mode(self):
+
+        self.mode_state
+        self.program_mode
         pass
-        #TODO get mode selection from input
         #print 'Checking Program State'
 
     def set_relays(self):

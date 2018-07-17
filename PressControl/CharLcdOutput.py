@@ -1,5 +1,6 @@
 import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
+import RPi.GPIO as GPIO
 
 import Utilities
 
@@ -24,9 +25,14 @@ class CharLcdOutput:
         try:
             gpio = MCP.MCP23017(0x22, busnum=1)
 
+            # must set enable bit to low value
+            gpio.setup(9, GPIO.OUT)
+            gpio.output(9,GPIO.LOW)
+
             return LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7,
                                                lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,
                                                gpio=gpio)
-        except:
+        except Exception as e:
             print 'Using Fake LCD'
+            print(e)
             return Utilities.FakeLCD()
