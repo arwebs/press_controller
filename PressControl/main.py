@@ -4,6 +4,8 @@ import Adafruit_MCP3008
 import Adafruit_CharLCD as LCD
 import Adafruit_GPIO.MCP230xx as MCP
 import RPi.GPIO as GPIO
+import atexit
+import time
 
 def setup_pins():
     print "Setup Pins."
@@ -59,17 +61,92 @@ def setup_pins():
         lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,gpio=gpio)
         lcd.message("Hello!")
 
+        # LEDs
+        led_gpio = MCP.MCP23017(0x20, busnum=1)
+        for i in range(0, 16):
+            led_gpio.setup(i, GPIO.OUT)
+            led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
+            # time.sleep(0.2)
+        #time.sleep(2)
+        for i in range(0, 16):
+            led_gpio.output(i, GPIO.LOW)  # True is HIGH is OFF, False is LOW is ON
+            # time.sleep(0.1)
+
+        #digital input pins
         digital_gpio = MCP.MCP23017(0x21, busnum=1)
         for i in range(0, 4):
+            digital_gpio.setup(i, GPIO.OUT)
             digital_gpio.output(i, GPIO.HIGH)
         for i in range(4, 16):
             digital_gpio.setup(i, GPIO.IN)
             digital_gpio.pullup(i, True)
 
-        return [sensor, sensor2, analog_sensors, digital_gpio, lcd]
+        return [sensor, sensor2, analog_sensors, digital_gpio, lcd, led_gpio]
     except Exception as e:
         print(e)
         print 'Could not reach temperature sensors or analog sensor.'
+
+
+
+start_button = False
+stop_button = False
+auto_mode = True
+manual_mode = False
+config_mode = False
+top_heat_blanket_off = False
+top_heat_blanket_auto = True
+top_heat_blanket_on = False
+bottom_heat_blanket_off = False
+bottom_heat_blanket_auto = True
+bottom_heat_blanket_on = False
+intake_solenoid_off = False
+intake_solenoid_auto = True
+intake_solenoid_on = False
+exhaust_solenoid_off = False
+exhaust_solenoid_auto = True
+exhaust_solenoid_on = False
+
+# 4	    STOP
+# 5	    START
+# 6 	Mode switch left
+# 7	    Mode switch right
+# 8	    Blanket 2 switch left
+# 9	    Blanket 2 switch right
+# 10	Solenoid 1 switch left
+# 11	Solenoid 1 switch right
+# 12	Solenoid 2 switch RIGHT
+# 13	Solenoid 2 switch LEFT
+# 14	Blanket 1 switch left
+# 15	Blanket 1 switch right
+
+
+def update_input_values(digital_input_values):
+    print "here"
+    global start_button, stop_button,auto_mode, manual_mode, config_mode, top_heat_blanket_off, top_heat_blanket_auto, top_heat_blanket_on
+    global bottom_heat_blanket_off, bottom_heat_blanket_auto, bottom_heat_blanket_on, intake_solenoid_off, intake_solenoid_auto, intake_solenoid_on
+    global exhaust_solenoid_off, exhaust_solenoid_auto, exhaust_solenoid_on
+    print digital_input_values
+    start_button = not digital_input_values[4]
+    print "here2"
+    stop_button = not digital_input_values[5]
+    manual_mode = not digital_input_values[7]
+    auto_mode = digital_input_values[6] and digital_input_values[7]
+    config_mode = not digital_input_values[6]
+    bottom_heat_blanket_auto = digital_input_values[14] and digital_input_values[15]
+    bottom_heat_blanket_off = not digital_input_values[14]
+    bottom_heat_blanket_on = not digital_input_values[15]
+    top_heat_blanket_auto = digital_input_values[8] and digital_input_values[9]
+    top_heat_blanket_off = not digital_input_values[8]
+    top_heat_blanket_on = not digital_input_values[9]
+    intake_solenoid_auto = digital_input_values[10] and digital_input_values[11]
+    intake_solenoid_off = not digital_input_values[10]
+    intake_solenoid_on = not digital_input_values[11]
+    exhaust_solenoid_auto = digital_input_values[12] and digital_input_values[13]
+    exhaust_solenoid_off = not digital_input_values[13]
+    exhaust_solenoid_on = not digital_input_values[12]
+    print "update_input_values"
+
+
 
 def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
     print "Checking Sensors."
@@ -109,11 +186,11 @@ def get_input_values():
 def handle_sensor_problem():
     print "handling sensor problem"
 
-def handle_input_problem():
-    print "handling input problem"
-
 def set_power_leds():
-    print "setting power LEDs"
+    led_gpio.output(9, not top_heat_blanket_on)
+    led_gpio.output(12,not  bottom_heat_blanket_on)
+    led_gpio.output(2, not intake_solenoid_on)
+    led_gpio.output(3, not exhaust_solenoid_on)
 
 def attempt_to_leave_current_state():
     print "attempting to leave current state"
@@ -129,34 +206,58 @@ def enter_new_state():
 def perform_state_specific_operations():
     print "performing state specific operations..."
 
+def set_relays():
+    digital_input_values.output(0, top_heat_blanket_on)
+    digital_input_values.output(1, bottom_heat_blanket_on)
+    digital_input_values.output(2, intake_solenoid_on)
+    digital_input_values.output(3, exhaust_solenoid_on)
+
+@atexit.register
+def gracefulShutdown():
+    for i in range(0, 16):
+        led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
+        led_gpio.output(5, GPIO.LOW)
+    #lcd.clear()
+    #turn off relays
+    for i in range(0,4):
+        digital_input_values.output(i, GPIO.LOW)
+    lcd.message("ERROR")
+
 sensorProblem = False
 inputProblem = False
 newStateRequested = True
 currentState = "Startup"
 
 
-(sensor, sensor2, analog_input_values, digital_input_values, lcd)= setup_pins()
+(sensor, sensor2, analog_input_values, digital_input_values, lcd, led_gpio)= setup_pins()
+keepGoing = True
+led_gpio.output(5, GPIO.HIGH)
+while keepGoing:
+    try:
+        time.sleep(0.5)
+        print(chr(27) + "[2J")
+        allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
+        print allSensorValues[0]
+        print allSensorValues[1]
+        print allSensorValues[2]
+        print allSensorValues[3]
+        if is_there_a_sensor_problem(allSensorValues):
+            handle_sensor_problem()
+        lcd.message("")
 
-while True:
-    allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
-    print allSensorValues[0]
-    print allSensorValues[1]
-    print allSensorValues[2]
-    print allSensorValues[3]
-    if is_there_a_sensor_problem(allSensorValues):
-        handle_sensor_problem()
+        update_input_values(allSensorValues[3])
+        set_power_leds()
+        set_relays()
+        newStateRequested = is_new_state_requested(currentState, digital_input_values)
+        if newStateRequested:
+            successfullyLeftState = attempt_to_leave_current_state()
+            if successfullyLeftState:
+                currentState = "TODO: newState"
+                enter_new_state()
+        perform_state_specific_operations()
+    except:
+        keepGoing = False
+        lcd.message("Fatal Error.")
 
-    allInputValues = get_input_values()
-    if is_there_an_input_problem(allInputValues):
-        handle_input_problem()
-
-    set_power_leds()
 
 
-    newStateRequested = is_new_state_requested(currentState, allInputValues)
-    if newStateRequested:
-        successfullyLeftState = attempt_to_leave_current_state()
-        if successfullyLeftState:
-            currentState = "TODO: newState"
-            enter_new_state()
-    perform_state_specific_operations()
