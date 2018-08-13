@@ -1,11 +1,15 @@
-class ManualState:
+class ConfigState:
+
     def __init__(self):
         pass
+
     def enter(self):
-        print "Entering Manual State"
+        print "Entering Setup State"
         return self
+
     def exit(self):
-        print "Exiting Manual State"
+        print "Exiting Setup State"
         return True
+
     def in_state(self):
-        print "In Manual State"
+        print "In Setup State"

@@ -1,11 +1,12 @@
 class AutomaticState:
-    @staticmethod
-    def enter():
+    def __init__(self):
+        pass
+
+    def enter(self):
         print "Entering Automatic State"
-    @staticmethod
-    def exit():
+        return self
+    def exit(self):
         print "Exiting Automatic State"
         return True
-    @staticmethod
-    def in_state():
+    def in_state(self):
         print "In Automatic State"

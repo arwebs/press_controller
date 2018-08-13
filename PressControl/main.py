@@ -7,6 +7,11 @@ import RPi.GPIO as GPIO
 import atexit
 import time
 
+from AutomaticState import AutomaticState
+from ManualState import ManualState
+from ConfigState import ConfigState
+
+
 def setup_pins():
     print "Setup Pins."
     # setting up SPI connected devices (temperature sensors and analog sensors)
@@ -121,13 +126,11 @@ exhaust_solenoid_on = False
 
 
 def update_input_values(digital_input_values):
-    print "here"
     global start_button, stop_button,auto_mode, manual_mode, config_mode, top_heat_blanket_off, top_heat_blanket_auto, top_heat_blanket_on
     global bottom_heat_blanket_off, bottom_heat_blanket_auto, bottom_heat_blanket_on, intake_solenoid_off, intake_solenoid_auto, intake_solenoid_on
     global exhaust_solenoid_off, exhaust_solenoid_auto, exhaust_solenoid_on
     print digital_input_values
     start_button = not digital_input_values[4]
-    print "here2"
     stop_button = not digital_input_values[5]
     manual_mode = not digital_input_values[7]
     auto_mode = digital_input_values[6] and digital_input_values[7]
@@ -174,7 +177,9 @@ def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
     return temp, temp1, analog_input_values, digital_input_values
 
 def is_there_a_sensor_problem(allSensorValues):
-    return False
+    #if either temperature sensor is too hot
+    #come back and check pressure value (#3 here)
+    return allSensorValues[0] > 190 or allSensorValues[1] > 190 or allSensorValues[2][0] > 900
 
 def is_there_an_input_problem(allInputValues):
     return False
@@ -192,20 +197,6 @@ def set_power_leds():
     led_gpio.output(2, not intake_solenoid_on)
     led_gpio.output(3, not exhaust_solenoid_on)
 
-def attempt_to_leave_current_state():
-    print "attempting to leave current state"
-    return True
-
-def is_new_state_requested(currentState, allInputValues):
-    print "figuring out if newstate was requested"
-    return True
-
-def enter_new_state():
-    print "entering new state"
-
-def perform_state_specific_operations():
-    print "performing state specific operations..."
-
 def set_relays():
     digital_input_values.output(0, top_heat_blanket_on)
     digital_input_values.output(1, bottom_heat_blanket_on)
@@ -216,22 +207,24 @@ def set_relays():
 def gracefulShutdown():
     for i in range(0, 16):
         led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
-        led_gpio.output(5, GPIO.LOW)
-    #lcd.clear()
+    #led_gpio.output(5, GPIO.LOW)
+    lcd.clear()
     #turn off relays
     for i in range(0,4):
         digital_input_values.output(i, GPIO.LOW)
-    lcd.message("ERROR")
+    #lcd.message("ERROR")
 
 sensorProblem = False
 inputProblem = False
-newStateRequested = True
-currentState = "Startup"
-
 
 (sensor, sensor2, analog_input_values, digital_input_values, lcd, led_gpio)= setup_pins()
 keepGoing = True
 led_gpio.output(5, GPIO.HIGH)
+
+stateObjects = [ConfigState(), ManualState(), AutomaticState()]
+currentStateObject = stateObjects[1].enter()
+requestedStateObject = stateObjects[1].enter()
+
 while keepGoing:
     try:
         time.sleep(0.5)
@@ -246,15 +239,25 @@ while keepGoing:
         lcd.message("")
 
         update_input_values(allSensorValues[3])
-        set_power_leds()
-        set_relays()
-        newStateRequested = is_new_state_requested(currentState, digital_input_values)
-        if newStateRequested:
-            successfullyLeftState = attempt_to_leave_current_state()
-            if successfullyLeftState:
-                currentState = "TODO: newState"
-                enter_new_state()
-        perform_state_specific_operations()
+
+        if manual_mode:
+            requestedStateObject = stateObjects[1]
+        if auto_mode:
+            requestedStateObject = stateObjects[2]
+        if config_mode:
+            requestedStateObject = stateObjects[0]
+
+        if currentStateObject != requestedStateObject:
+            if currentStateObject.exit():
+                requestedStateObject.enter()
+                currentStateObject = requestedStateObject
+        else:
+            currentStateObject.in_state()
+
+        # set_power_leds()
+        # set_relays()
+
+
     except:
         keepGoing = False
         lcd.message("Fatal Error.")
