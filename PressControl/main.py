@@ -1,16 +1,22 @@
 
-import Adafruit_MAX31855.MAX31855 as MAX31855
-import Adafruit_MCP3008
-import Adafruit_CharLCD as LCD
-import Adafruit_GPIO.MCP230xx as MCP
-import RPi.GPIO as GPIO
 import atexit
 import time
 
-from AutomaticState import AutomaticState
-from ManualState import ManualState
-from ConfigState import ConfigState
+import Adafruit_CharLCD as LCD
+import Adafruit_GPIO.MCP230xx as MCP
+import Adafruit_MAX31855.MAX31855 as MAX31855
+import Adafruit_MCP3008
+import RPi.GPIO as GPIO
 
+
+import press_globals as pg
+
+from AutomaticState import AutomaticState
+from ConfigState import ConfigState
+from ManualState import ManualState
+
+
+pg.init()
 
 def setup_pins():
     print "Setup Pins."
@@ -63,8 +69,10 @@ def setup_pins():
         gpio.setup(9, GPIO.OUT)
         gpio.output(9, GPIO.LOW)
 
-        lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,gpio=gpio)
+        lcd = LCD.Adafruit_RGBCharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows, lcd_red, lcd_green, lcd_blue,enable_pwm=False, gpio=gpio)
         lcd.message("Hello!")
+        lcd.set_color(0, 0, 0)  # 0 [zero] is for On
+
 
         # LEDs
         led_gpio = MCP.MCP23017(0x20, busnum=1)
@@ -93,23 +101,7 @@ def setup_pins():
 
 
 
-start_button = False
-stop_button = False
-auto_mode = True
-manual_mode = False
-config_mode = False
-top_heat_blanket_off = False
-top_heat_blanket_auto = True
-top_heat_blanket_on = False
-bottom_heat_blanket_off = False
-bottom_heat_blanket_auto = True
-bottom_heat_blanket_on = False
-intake_solenoid_off = False
-intake_solenoid_auto = True
-intake_solenoid_on = False
-exhaust_solenoid_off = False
-exhaust_solenoid_auto = True
-exhaust_solenoid_on = False
+
 
 # 4	    STOP
 # 5	    START
@@ -126,27 +118,25 @@ exhaust_solenoid_on = False
 
 
 def update_input_values(digital_input_values):
-    global start_button, stop_button,auto_mode, manual_mode, config_mode, top_heat_blanket_off, top_heat_blanket_auto, top_heat_blanket_on
-    global bottom_heat_blanket_off, bottom_heat_blanket_auto, bottom_heat_blanket_on, intake_solenoid_off, intake_solenoid_auto, intake_solenoid_on
-    global exhaust_solenoid_off, exhaust_solenoid_auto, exhaust_solenoid_on
+
     print digital_input_values
-    start_button = not digital_input_values[4]
-    stop_button = not digital_input_values[5]
-    manual_mode = not digital_input_values[7]
-    auto_mode = digital_input_values[6] and digital_input_values[7]
-    config_mode = not digital_input_values[6]
-    bottom_heat_blanket_auto = digital_input_values[14] and digital_input_values[15]
-    bottom_heat_blanket_off = not digital_input_values[14]
-    bottom_heat_blanket_on = not digital_input_values[15]
-    top_heat_blanket_auto = digital_input_values[8] and digital_input_values[9]
-    top_heat_blanket_off = not digital_input_values[8]
-    top_heat_blanket_on = not digital_input_values[9]
-    intake_solenoid_auto = digital_input_values[10] and digital_input_values[11]
-    intake_solenoid_off = not digital_input_values[10]
-    intake_solenoid_on = not digital_input_values[11]
-    exhaust_solenoid_auto = digital_input_values[12] and digital_input_values[13]
-    exhaust_solenoid_off = not digital_input_values[13]
-    exhaust_solenoid_on = not digital_input_values[12]
+    pg.start_button = not digital_input_values[4]
+    pg.stop_button = not digital_input_values[5]
+    pg.manual_mode = not digital_input_values[7]
+    pg.auto_mode = digital_input_values[6] and digital_input_values[7]
+    pg.config_mode = not digital_input_values[6]
+    pg.bottom_heat_blanket_auto = digital_input_values[14] and digital_input_values[15]
+    pg.bottom_heat_blanket_off = not digital_input_values[14]
+    pg.bottom_heat_blanket_on = not digital_input_values[15]
+    pg.top_heat_blanket_auto = digital_input_values[8] and digital_input_values[9]
+    pg.top_heat_blanket_off = not digital_input_values[8]
+    pg.top_heat_blanket_on = not digital_input_values[9]
+    pg.intake_solenoid_auto = digital_input_values[10] and digital_input_values[11]
+    pg.intake_solenoid_off = not digital_input_values[10]
+    pg.intake_solenoid_on = not digital_input_values[11]
+    pg.exhaust_solenoid_auto = digital_input_values[12] and digital_input_values[13]
+    pg.exhaust_solenoid_off = not digital_input_values[13]
+    pg.exhaust_solenoid_on = not digital_input_values[12]
     print "update_input_values"
 
 
@@ -179,29 +169,25 @@ def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
 def is_there_a_sensor_problem(allSensorValues):
     #if either temperature sensor is too hot
     #come back and check pressure value (#3 here)
-    return allSensorValues[0] > 190 or allSensorValues[1] > 190 or allSensorValues[2][0] > 900
+    return allSensorValues[0] > 85 or allSensorValues[1] > 85 or allSensorValues[2][0] > 900
 
 def is_there_an_input_problem(allInputValues):
     return False
-
-def get_input_values():
-    print "Reading Inputs."
-    return []
 
 def handle_sensor_problem():
     print "handling sensor problem"
 
 def set_power_leds():
-    led_gpio.output(9, not top_heat_blanket_on)
-    led_gpio.output(12,not  bottom_heat_blanket_on)
-    led_gpio.output(2, not intake_solenoid_on)
-    led_gpio.output(3, not exhaust_solenoid_on)
+    led_gpio.output(9, not pg.top_heat_blanket_on)
+    led_gpio.output(12,not  pg.bottom_heat_blanket_on)
+    led_gpio.output(2, not pg.intake_solenoid_on)
+    led_gpio.output(3, not pg.exhaust_solenoid_on)
 
 def set_relays():
-    digital_input_values.output(0, top_heat_blanket_on)
-    digital_input_values.output(1, bottom_heat_blanket_on)
-    digital_input_values.output(2, intake_solenoid_on)
-    digital_input_values.output(3, exhaust_solenoid_on)
+    digital_input_values.output(0, pg.top_heat_blanket_on)
+    digital_input_values.output(1, pg.bottom_heat_blanket_on)
+    digital_input_values.output(2, pg.intake_solenoid_on)
+    digital_input_values.output(3, pg.exhaust_solenoid_on)
 
 @atexit.register
 def gracefulShutdown():
@@ -209,6 +195,8 @@ def gracefulShutdown():
         led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
     #led_gpio.output(5, GPIO.LOW)
     lcd.clear()
+    lcd.set_color(1,1,1)
+    currentStateObject.exit()
     #turn off relays
     for i in range(0,4):
         digital_input_values.output(i, GPIO.LOW)
@@ -221,14 +209,18 @@ inputProblem = False
 keepGoing = True
 led_gpio.output(5, GPIO.HIGH)
 
-stateObjects = [ConfigState(), ManualState(), AutomaticState()]
-currentStateObject = stateObjects[1].enter()
-requestedStateObject = stateObjects[1].enter()
+currentStateObject = ManualState().enter()
+requestedStateObject = ManualState().enter()
+
+#instantiate our state classes once so they can persist data without going static/global
+manual_state = ManualState()
+automatic_state = AutomaticState()
+config_state = ConfigState()
 
 while keepGoing:
     try:
         time.sleep(0.5)
-        print(chr(27) + "[2J")
+        print(chr(27) + "[2J") # clears console
         allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
         print allSensorValues[0]
         print allSensorValues[1]
@@ -236,26 +228,25 @@ while keepGoing:
         print allSensorValues[3]
         if is_there_a_sensor_problem(allSensorValues):
             handle_sensor_problem()
-        lcd.message("")
 
         update_input_values(allSensorValues[3])
 
-        if manual_mode:
-            requestedStateObject = stateObjects[1]
-        if auto_mode:
-            requestedStateObject = stateObjects[2]
-        if config_mode:
-            requestedStateObject = stateObjects[0]
+        if pg.manual_mode:
+            requestedStateObject = manual_state
+        if pg.auto_mode:
+            requestedStateObject = automatic_state
+        if pg.config_mode:
+            requestedStateObject = config_state
 
         if currentStateObject != requestedStateObject:
             if currentStateObject.exit():
                 requestedStateObject.enter()
                 currentStateObject = requestedStateObject
         else:
-            currentStateObject.in_state()
+            currentStateObject.in_state(allSensorValues, lcd, led_gpio)
 
-        # set_power_leds()
-        # set_relays()
+        set_power_leds()
+        set_relays()
 
 
     except:
