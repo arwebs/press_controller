@@ -18,7 +18,7 @@ main control loop
 	set power LEDs
 	
 	if state is:
-		Startup
+		Startup -- not handling this as a separate state...
 			EnterStartup:
 				Display welcome
 				Verify sensors and pins

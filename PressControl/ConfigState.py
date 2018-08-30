@@ -1,6 +1,5 @@
 import press_globals as pg
 
-
 def set_value_from_pot(pot_value, min_value, max_value):
     return (pot_value * (max_value-min_value))/1024.0
 
@@ -24,11 +23,11 @@ class ConfigState:
 
         if pg.start_button:
             self.config_step = (self.config_step + 1) % 2
-
+        lcd.clear()
         if self.config_step == 0:
-            pg.total_run_duration = set_value_from_pot(allSensorValues[2][1], 20., 100.)
             pg.top_rampup_time = set_value_from_pot(allSensorValues[2][2], 20., 100.)
             pg.bottom_rampup_time = set_value_from_pot(allSensorValues[2][3], 20., 100.)
+            pg.total_run_duration = set_value_from_pot(allSensorValues[2][1], max(pg.top_rampup_time, pg.bottom_rampup_time), 120.)
             lcd.message("Timing Config:\nTop Ramp-up: " +
                         str(pg.top_rampup_time) +
                         "\nTotal Duration: " +

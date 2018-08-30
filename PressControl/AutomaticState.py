@@ -3,92 +3,134 @@ import numpy as np
 import time
 import Utilities
 
+def determine_target_temperature(elapsed_time, rampup_time, start_temperature, max_temperature):
+    # if rampup time is finished, just return max temperature so we hold there
+    if elapsed_time > rampup_time:
+        return max_temperature
+
+    # in the rampup period, find the equation of the line and plug in elapsed time to find target
+    slope = (max_temperature - start_temperature) / rampup_time
+    return slope * elapsed_time + start_temperature
+
+def determine_blanket_desired_duty_cycle(current_temperature, target_temperature, last_n_temperatures):
+    return 0.5
+
 class AutomaticStateActions:
     def __init__(self):
-        self.temperatureBuffer
+        self.top_blanket_temperatures = []
+        self.bottom_blanket_temperatures = []
+        self.top_duty_cycle = 0.5
+        self.bottom_duty_cycle = 0.5
+        self.bufferLength = 10
+        self.start_time = time.time()
+        self.top_start_temperature = 0.
+        self.bottom_start_temperature = 0.
+        self.counter = 0
         pass
 
-    def prepare_for_run(self):
-        pass
+    def prepare_for_run(self, allSensorValues):
+        # set run parameters
+        # await start button press
+        return ""
 
-    def do_run(self):
+    def await_start(self):
+        #display run parameters
+        #wait for start button to be pressed
+        return ""
+
+    def pressurize(self):
+        # pressurize system
+        # once pressurized, proceed to run
+        ## before allowing a transition to running state, set start time
+        self.start_time = time.time()
+        self.top_start_temperature = allSensorValues[0]
+        self.bottom_start_temperature = allSensorValues[1]
+        # if stop button pressed, open relief valve until pressure < 20psi
+        return ""
+
+    def do_run(self, allSensorValues):
         if pg.stop_button:
             # turn off relays
             # log run
-            pass
+            return ""
+        elapsed_time = time.time() - self.start_time
 
+        #fill buffer of temperatures
+        self.top_blanket_temperatures.append(allSensorValues[0])
+        self.bottom_blanket_temperatures.append(allSensorValues[1])
 
+        top_target_temp = determine_target_temperature(elapsed_time, pg.top_rampup_time, self.top_start_temperature, pg.top_max_temp)
+        bottom_target_temp = determine_target_temperature(elapsed_time, pg.bottom_rampup_time, self.bottom_start_temperature, pg.bottom_max_temp)
+
+        #if the buffer is full, calculate duty cycle
+        if len(self.top_blanket_temperatures) >= self.bufferLength:
+            self.top_duty_cycle = determine_blanket_desired_duty_cycle(
+                allSensorValues[0], top_target_temp, self.top_blanket_temperatures)
+            self.bottom_duty_cycle = determine_blanket_desired_duty_cycle(allSensorValues[1],
+                bottom_target_temp, self.bottom_blanket_temperatures)
+            self.top_blanket_temperatures = []
+            self.bottom_blanket_temperatures = []
+
+        # if we're too hot, take immediate action
+        if allSensorValues[0] > top_target_temp + 0.5:
+            self.top_duty_cycle = 0
+
+        if allSensorValues[1] > bottom_target_temp + 0.5:
+            self.bottom_duty_cycle = 0
+
+        # set blanket on/off status based on
+        self.counter = (self.counter + 1) % 10
+        pg.top_heat_blanket_on = (self.top_duty_cycle * 10) > self.counter
+        pg.bottom_heat_blanket_on = (self.bottom_duty_cycle * 10) > self.counter
+
+        if elapsed_time > pg.total_run_duration:
+            return "Finished"
+        return "Running"
 
     def finish(self):
-        pass
+        if pg.start_button:
+            return ""
+        return "Finished"
 
     def error(self):
+        # turn on error light
+        # turn off relays except if over-pressurized, then let off extra pressure
+        # await start button for reset
         pass
 
     def abort(self):
         # turn off relays
         # reset lights
         # close run data
+        # confirm if system is pressurized
+            # otherwise await depressurization
         return True
 
 class AutomaticState:
     def __init__(self):
-        self.duration = 40 * 60  # TODO set this
-        self.rampup_time = 20 * 60  # TODO set this
-        self.max_temperature = 82  # TODO set this
-
-        self.myTimes = []
-        self.myTemps = []
-        self.storedTimes = []
-        self.storedTemps = []
-        self.counter = 0.
-
-        self.dutyCycle = 0.5
-        self.bufferLength = 10
-
-        self.initialTemp = 0.
-
-        self.isOn = False
         self.auto_state = "Entering"
         self.state_actions = AutomaticStateActions()
 
     def enter(self):
         print "Entering Automatic State"
         self.auto_state = "Entering"
-
-        self.duration = 40 * 60  # TODO set this
-        self.rampup_time = 20 * 60  # TODO set this
-        self.max_temperature = 82  # TODO set this
-
-        self.myTimes = []
-        self.myTemps = []
-        self.storedTimes = []
-        self.storedTemps = []
-        self.counter = 0.
-
-        self.dutyCycle = 0.5
-        self.bufferLength = 10
-
-        self.initialTemp = 25. #allSensorValues[0]
-
-        self.isOn = False
-
         return self
+
     def exit(self):
         print "Exiting Automatic State"
-        if self.auto_state == "Running":
-            return self.state_actions.abort()
-        return True
+        return self.state_actions.abort()
 
     def in_state(self, allSensorValues, lcd, led_gpio):
         if self.auto_state == "Entering":
-            self.state_actions.prepare_for_run()
+            self.auto_state = self.state_actions.prepare_for_run()
+        elif self.auto_state == "Pressurizing":
+            self.auto_state = self.state_actions.pressurize()
         elif self.auto_state == "Running":
-            self.state_actions.do_run()
+            self.auto_state = self.state_actions.do_run()
         elif self.auto_state == "Finished":
-            self.state_actions.finish()
+            self.auto_state = self.state_actions.finish()
         elif self.auto_state == "Error":
-            self.state_actions.error()
+            self.auto_state = self.state_actions.error()
 
 
 
@@ -98,7 +140,7 @@ class AutomaticState:
         print "In Automatic State"
         lcd.clear()
         lcd.message("In Automatic State")
-        lcd.clear()
+
 
         while self.counter < self.duration:  # TODO need to refactor such that this doesn't block main control loop
             self.temp = allSensorValues[0]
