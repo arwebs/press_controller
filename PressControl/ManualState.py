@@ -1,10 +1,13 @@
 import press_globals as pg
 import Adafruit_CharLCD as LCD
+import time
 
 class ManualState:
     def __init__(self):
+        self.start_time = time.time()
         pass
     def enter(self):
+        self.start_time = time.time()
         print "Entering Manual State"
         return self
     def exit(self):
