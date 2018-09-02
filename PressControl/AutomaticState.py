@@ -65,7 +65,7 @@ class AutomaticStateActions:
             return AutoStates.Running
         return AutoStates.Pressurizing
 
-    def do_run(self, allSensorValues):
+    def do_run(self, allSensorValues, lcd, led_gpio):
         if pg.stop_button:
             pg.intake_solenoid_on = False
             pg.exhaust_solenoid_on = True
@@ -105,6 +105,8 @@ class AutomaticStateActions:
         if allSensorValues[1] > bottom_target_temp + 0.75:
             self.bottom_duty_cycle = 0
 
+        self.set_temp_indicator_leds(allSensorValues, top_target_temp, bottom_target_temp, led_gpio)
+
         # set blanket on/off status based on duty cycle + overrides
         self.counter = (self.counter + 1) % self.buffer_length
 
@@ -119,13 +121,14 @@ class AutomaticStateActions:
 
         return AutoStates.Running
 
-    def finish(self):
+    def finish(self, allSensorValues, lcd, led_gpio):
         if pg.start_button:
             return AutoStates.Entering
-
+        lcd.clear()
+        lcd.message("Run finished.\nPress green button to reset.")
         return AutoStates.Finished
 
-    def error(self):
+    def error(self, allSensorValues, lcd, led_gpio):
         # turn on error light
         # turn off relays except if over-pressurized, then let off extra pressure
         # await start button for reset
@@ -133,7 +136,7 @@ class AutomaticStateActions:
             return AutoStates.Entering
         return AutoStates.Error
 
-    def abort(self):
+    def abort(self, allSensorValues, lcd, led_gpio):
         # turn off relays
         # reset lights
         # close run data
@@ -141,6 +144,7 @@ class AutomaticStateActions:
             # otherwise await depressurization
         return True
 
+    ## "private" methods...
     def determine_target_temperature(self, rampup_time, start_temperature, max_temperature):
         elapsed_time = int(time.time() - self.start_time)
 
@@ -175,6 +179,15 @@ class AutomaticStateActions:
         else:
             return 0.
 
+    def set_temp_indicator_leds(self, allSensorValues, top_target_temp, bottom_target_temp, led_gpio):
+        # must set pin #s
+        led_gpio.output(TOP_HOT_PIN, not allSensorValues[0] > top_target_temp)
+        led_gpio.output(TOP_COLD_PIN, not allSensorValues[0] < top_target_temp)
+        led_gpio.output(TOP_GOOD_PIN, not int(allSensorValues[0]) == int(top_target_temp))
+
+        led_gpio.output(BOTTOM_HOT_PIN, not allSensorValues[1] > bottom_target_temp)
+        led_gpio.output(BOTTOM_COLD_PIN, not allSensorValues[1] < bottom_target_temp)
+        led_gpio.output(BOTTOM_GOOD_PIN, not int(allSensorValues[1]) == int(bottom_target_temp))
 
 class AutomaticState:
     def __init__(self):

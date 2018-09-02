@@ -8,14 +8,13 @@ import Adafruit_MAX31855.MAX31855 as MAX31855
 import Adafruit_MCP3008
 import RPi.GPIO as GPIO
 
-
 import press_globals as pg
 
 from AutomaticState import AutomaticState
 from ConfigState import ConfigState
 from ManualState import ManualState
 
-
+# initialize global variables
 pg.init()
 
 def setup_pins():
@@ -73,17 +72,13 @@ def setup_pins():
         lcd.message("Hello!")
         lcd.set_color(0, 0, 0)  # 0 [zero] is for On
 
-
         # LEDs
         led_gpio = MCP.MCP23017(0x20, busnum=1)
         for i in range(0, 16):
             led_gpio.setup(i, GPIO.OUT)
             led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
-            # time.sleep(0.2)
-        #time.sleep(2)
         for i in range(0, 16):
             led_gpio.output(i, GPIO.LOW)  # True is HIGH is OFF, False is LOW is ON
-            # time.sleep(0.1)
 
         #digital input pins
         digital_gpio = MCP.MCP23017(0x21, busnum=1)
@@ -99,10 +94,6 @@ def setup_pins():
         print(e)
         print 'Could not reach temperature sensors or analog sensor.'
 
-
-
-
-
 # 4	    STOP
 # 5	    START
 # 6 	Mode switch left
@@ -116,10 +107,7 @@ def setup_pins():
 # 14	Blanket 1 switch left
 # 15	Blanket 1 switch right
 
-
 def update_input_values(digital_input_values):
-
-    print digital_input_values
     pg.start_button = not digital_input_values[4]
     pg.stop_button = not digital_input_values[5]
     pg.manual_mode = not digital_input_values[7]
@@ -137,27 +125,20 @@ def update_input_values(digital_input_values):
     pg.exhaust_solenoid_auto = digital_input_values[12] and digital_input_values[13]
     pg.exhaust_solenoid_off = not digital_input_values[13]
     pg.exhaust_solenoid_on = not digital_input_values[12]
-    print "update_input_values"
-
-
 
 def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
     print "Checking Sensors."
     GPIO.output(22, True)
-    #sensor = self.temperature_sensors[i]
     temp = sensor.readTempC()
-    # internal = sensor.readInternalC()
     GPIO.output(22, False)
     GPIO.output(27, True)
-    #sensor = self.temperature_sensors[i]
     temp1 = sensor2.readTempC()
-    # internal1 = sensor.readInternalC()
     GPIO.output(27, False)
     analog_spi_select = 17
     GPIO.output(analog_spi_select, True)
     analog_input_values = [0] * 8
     for sensor in range(8):
-        # The read_ad function will get the value of the specified channel (0-7).
+        # The read_adc function will get the value of the specified channel (0-7).
         analog_input_values[sensor] = analogSensors.read_adc(sensor)
     GPIO.output(analog_spi_select, False)
     digital_input_values = [0] * 16
@@ -171,17 +152,13 @@ def is_there_a_sensor_problem(allSensorValues):
     #come back and check pressure value (#3 here)
     return allSensorValues[0] > 85 or allSensorValues[1] > 85 or allSensorValues[2][0] > 900
 
-def is_there_an_input_problem(allInputValues):
-    return False
-
-def handle_sensor_problem():
-    print "handling sensor problem"
-
 def set_power_leds():
     led_gpio.output(9, not pg.top_heat_blanket_on)
     led_gpio.output(12,not  pg.bottom_heat_blanket_on)
     led_gpio.output(2, not pg.intake_solenoid_on)
     led_gpio.output(3, not pg.exhaust_solenoid_on)
+    #led_gpio.output(POWER_PIN, False)
+    #led_gpio.output(PRESSURIZED_PIN, not is_system_pressurized())
 
 def set_relays():
     digital_input_values.output(0, pg.top_heat_blanket_on)
@@ -200,7 +177,6 @@ def gracefulShutdown():
     #turn off relays
     for i in range(0,4):
         digital_input_values.output(i, GPIO.LOW)
-    #lcd.message("ERROR")
 
 sensorProblem = False
 inputProblem = False
@@ -219,7 +195,7 @@ config_state = ConfigState()
 
 while keepGoing:
     try:
-        time.sleep(0.5)
+        time.sleep(1.0)
         print(chr(27) + "[2J") # clears console
         allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
         print allSensorValues[0]
@@ -248,10 +224,6 @@ while keepGoing:
         set_power_leds()
         set_relays()
 
-
     except:
         keepGoing = False
         lcd.message("Fatal Error.")
-
-
-
