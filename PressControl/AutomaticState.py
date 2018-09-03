@@ -13,6 +13,31 @@ class AutoStates(Enum):
     Error = 5
     Aborted = 6
 
+### Top Row (Status LEDs)
+POWER_PIN = 1
+PRESSURIZED_PIN = 0
+RUN_IN_PROGRESS_PIN = 4
+ERROR_PIN = 5
+AUX_1_PIN = 6
+AUX_2_PIN = 7
+
+### Second Row (Power indicator LEDs)
+TOP_BLANKET_ON_PIN = 12
+BOTTOM_BLANKET_ON_PIN = 9
+INTAKE_SOLENOID_ON_PIN = 2
+EXHAUST_SOLENOID_ON_PIN = 3
+
+
+### Third Row (Temperature indicator LEDs)
+TOP_HOT_PIN = 15
+TOP_COLD_PIN = 13
+TOP_GOOD_PIN = 14
+BOTTOM_HOT_PIN = 8
+BOTTOM_COLD_PIN = 11
+BOTTOM_GOOD_PIN = 10
+
+
+
 class AutomaticStateActions:
     def __init__(self):
         self.top_blanket_temperatures = []
@@ -24,33 +49,39 @@ class AutomaticStateActions:
         self.top_start_temperature = 0.
         self.bottom_start_temperature = 0.
         self.counter = 0
+
         pass
 
     def perform_action(self, auto_state, allSensorValues, lcd, led_gpio):
         if auto_state == AutoStates.Entering:
-            auto_state = self.state_actions.prepare_for_run(allSensorValues, lcd, led_gpio)
+            auto_state = self.prepare_for_run(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Pressurizing:
-            auto_state = self.state_actions.pressurize(allSensorValues, lcd, led_gpio)
+            auto_state = self.pressurize(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Running:
-            auto_state = self.state_actions.do_run(allSensorValues, lcd, led_gpio)
+            auto_state = self.do_run(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Finished:
-            auto_state = self.state_actions.finish(allSensorValues, lcd, led_gpio)
+            auto_state = self.finish(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Error:
-            auto_state = self.state_actions.error(allSensorValues, lcd, led_gpio)
+            auto_state = self.error(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Aborted:
-            auto_state = self.state_actions.abort(allSensorValues, lcd, led_gpio)
+            auto_state = self.abort(allSensorValues, lcd, led_gpio)
 
         return auto_state
 
     def prepare_for_run(self, allSensorValues, lcd, led_gpio):
-        # set run parameters
-        if pg.start_button:
-            return AutoStates.Pressurizing
         lcd.clear()
         lcd.message("Press Green button\nto start run")
+
+        # set run parameters
+
+        if pg.start_button:
+            return AutoStates.Pressurizing
         return AutoStates.Entering
 
     def pressurize(self, allSensorValues, lcd, led_gpio):
+        lcd.clear()
+        lcd.message("Pressurizing...")
+
         ## before allowing a transition to running state, set start time
 
         pg.intake_solenoid_on = not pg.intake_solenoid_off
@@ -61,11 +92,15 @@ class AutomaticStateActions:
         self.bottom_start_temperature = allSensorValues[1]
 
         #verify which sensor value...and calibrate
-        if allSensorValues[3][1] > 700:
-            return AutoStates.Running
-        return AutoStates.Pressurizing
+        # if allSensorValues[3][1] > 700:
+        #     return AutoStates.Running
+        # return AutoStates.Pressurizing
+
+        return AutoStates.Running
 
     def do_run(self, allSensorValues, lcd, led_gpio):
+        lcd.clear()
+        lcd.message("Running...")
         if pg.stop_button:
             pg.intake_solenoid_on = False
             pg.exhaust_solenoid_on = True
@@ -110,8 +145,8 @@ class AutomaticStateActions:
         # set blanket on/off status based on duty cycle + overrides
         self.counter = (self.counter + 1) % self.buffer_length
 
-        pg.top_heat_blanket_on = not pg.top_heat_blanket_off and (((self.top_duty_cycle * self.buffer_length) > self.counter) or pg.top_blanket_on)
-        pg.bottom_heat_blanket_on = not pg.bottom_heat_blanket_off and (((self.bottom_duty_cycle * self.buffer_length) > self.counter) or pg.bottom_blanket_on)
+        pg.top_heat_blanket_on = not pg.top_heat_blanket_off and (((self.top_duty_cycle * self.buffer_length) > self.counter) or pg.top_heat_blanket_on)
+        pg.bottom_heat_blanket_on = not pg.bottom_heat_blanket_off and (((self.bottom_duty_cycle * self.buffer_length) > self.counter) or pg.bottom_heat_blanket_on)
 
         elapsed_time = time.time() - self.start_time
         if elapsed_time > pg.total_run_duration:
@@ -136,7 +171,7 @@ class AutomaticStateActions:
             return AutoStates.Entering
         return AutoStates.Error
 
-    def abort(self, allSensorValues, lcd, led_gpio):
+    def abort(self, allSensorValues = None, lcd = None, led_gpio = None):
         # turn off relays
         # reset lights
         # close run data
@@ -191,12 +226,12 @@ class AutomaticStateActions:
 
 class AutomaticState:
     def __init__(self):
-        self.auto_state = "Entering"
+        self.auto_state = AutoStates.Entering
         self.state_actions = AutomaticStateActions()
 
     def enter(self):
         print "Entering Automatic State"
-        self.auto_state = "Entering"
+        self.auto_state = AutoStates.Entering
         self.state_actions = AutomaticStateActions()
         return self
 

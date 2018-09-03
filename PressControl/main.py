@@ -79,6 +79,8 @@ def setup_pins():
             led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
         for i in range(0, 16):
             led_gpio.output(i, GPIO.LOW)  # True is HIGH is OFF, False is LOW is ON
+            #print "PIN: " + str(i)
+            #raw_input("Press Any Key")
 
         #digital input pins
         digital_gpio = MCP.MCP23017(0x21, busnum=1)
@@ -168,6 +170,7 @@ def set_relays():
 
 @atexit.register
 def gracefulShutdown():
+    print "Graceful Shutdown initialized"
     for i in range(0, 16):
         led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
     #led_gpio.output(5, GPIO.LOW)
@@ -203,7 +206,8 @@ while keepGoing:
         print allSensorValues[2]
         print allSensorValues[3]
         if is_there_a_sensor_problem(allSensorValues):
-            handle_sensor_problem()
+            # TODO...
+            pass
 
         update_input_values(allSensorValues[3])
 
@@ -224,6 +228,8 @@ while keepGoing:
         set_power_leds()
         set_relays()
 
-    except:
+
+    except Exception as e:
+        print(e)
         keepGoing = False
         lcd.message("Fatal Error.")
