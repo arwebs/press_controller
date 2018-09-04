@@ -3,6 +3,7 @@ import numpy as np
 import time
 import Utilities
 
+from datetime import timedelta
 from enum import Enum
 
 class AutoStates(Enum):
@@ -13,28 +14,7 @@ class AutoStates(Enum):
     Error = 5
     Aborted = 6
 
-### Top Row (Status LEDs)
-POWER_PIN = 1
-PRESSURIZED_PIN = 0
-RUN_IN_PROGRESS_PIN = 4
-ERROR_PIN = 5
-AUX_1_PIN = 6
-AUX_2_PIN = 7
 
-### Second Row (Power indicator LEDs)
-TOP_BLANKET_ON_PIN = 12
-BOTTOM_BLANKET_ON_PIN = 9
-INTAKE_SOLENOID_ON_PIN = 2
-EXHAUST_SOLENOID_ON_PIN = 3
-
-
-### Third Row (Temperature indicator LEDs)
-TOP_HOT_PIN = 15
-TOP_COLD_PIN = 13
-TOP_GOOD_PIN = 14
-BOTTOM_HOT_PIN = 8
-BOTTOM_COLD_PIN = 11
-BOTTOM_GOOD_PIN = 10
 
 
 
@@ -80,8 +60,8 @@ class AutomaticStateActions:
 
     def pressurize(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
-        lcd.message("Pressurizing...")
-
+        lcd.message("Pressurizing..." + str(allSensorValues[2][1]))
+        led_gpio.output(pg.RUN_IN_PROGRESS_PIN, False)
         ## before allowing a transition to running state, set start time
 
         pg.intake_solenoid_on = not pg.intake_solenoid_off
@@ -92,15 +72,14 @@ class AutomaticStateActions:
         self.bottom_start_temperature = allSensorValues[1]
 
         #verify which sensor value...and calibrate
-        # if allSensorValues[3][1] > 700:
-        #     return AutoStates.Running
-        # return AutoStates.Pressurizing
+        if allSensorValues[2][1] > 700:
+            return AutoStates.Running
+        return AutoStates.Pressurizing
 
         return AutoStates.Running
 
     def do_run(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
-        lcd.message("Running...")
         if pg.stop_button:
             pg.intake_solenoid_on = False
             pg.exhaust_solenoid_on = True
@@ -148,6 +127,11 @@ class AutomaticStateActions:
         pg.top_heat_blanket_on = not pg.top_heat_blanket_off and (((self.top_duty_cycle * self.buffer_length) > self.counter) or pg.top_heat_blanket_on)
         pg.bottom_heat_blanket_on = not pg.bottom_heat_blanket_off and (((self.bottom_duty_cycle * self.buffer_length) > self.counter) or pg.bottom_heat_blanket_on)
 
+        lcd.message("Time:" + str(timedelta(seconds=int(time.time() - self.start_time))) + " P:" + str(allSensorValues[2][1]) +
+            "\nBotA:" + str(allSensorValues[1]) + " BotT: " + str(bottom_target_temp) +
+            "\nTopA:" + str(allSensorValues[0]) + " TopT: " + str(top_target_temp) +
+            "\nTopDC:" + str(self.top_duty_cycle) + " BotDC:" + str(self.bottom_duty_cycle))
+
         elapsed_time = time.time() - self.start_time
         if elapsed_time > pg.total_run_duration:
             pg.top_heat_blanket_on = False
@@ -160,7 +144,12 @@ class AutomaticStateActions:
         if pg.start_button:
             return AutoStates.Entering
         lcd.clear()
-        lcd.message("Run finished.\nPress green button to reset.")
+        lcd.message("Run finished.\n\nPress green button to reset.")
+        pins_to_reset = [pg.TOP_HOT_PIN, pg.TOP_COLD_PIN, pg.TOP_GOOD_PIN, pg.BOTTOM_HOT_PIN, pg.BOTTOM_COLD_PIN, pg.BOTTOM_GOOD_PIN, pg.RUN_IN_PROGRESS_PIN]
+        for pin in pins_to_reset:
+            led_gpio.output(pin, True)  # True is HIGH is OFF, False is LOW is ON
+        if allSensorValues[2][1] > 700:
+            pg.exhaust_solenoid_on = not pg.exhaust_solenoid_off
         return AutoStates.Finished
 
     def error(self, allSensorValues, lcd, led_gpio):
@@ -182,7 +171,7 @@ class AutomaticStateActions:
     ## "private" methods...
     def determine_target_temperature(self, rampup_time, start_temperature, max_temperature):
         elapsed_time = int(time.time() - self.start_time)
-
+        print "Elapsed Time: " + str(elapsed_time) + " Ramp-up time: " + str(rampup_time) + " Max temp: " + str(max_temperature)
         # if rampup time is finished, just return max temperature so we hold there
         if elapsed_time > rampup_time:
             return max_temperature
@@ -216,13 +205,13 @@ class AutomaticStateActions:
 
     def set_temp_indicator_leds(self, allSensorValues, top_target_temp, bottom_target_temp, led_gpio):
         # must set pin #s
-        led_gpio.output(TOP_HOT_PIN, not allSensorValues[0] > top_target_temp)
-        led_gpio.output(TOP_COLD_PIN, not allSensorValues[0] < top_target_temp)
-        led_gpio.output(TOP_GOOD_PIN, not int(allSensorValues[0]) == int(top_target_temp))
+        led_gpio.output(pg.TOP_HOT_PIN, not allSensorValues[0] > top_target_temp)
+        led_gpio.output(pg.TOP_COLD_PIN, not allSensorValues[0] < top_target_temp)
+        led_gpio.output(pg.TOP_GOOD_PIN, not int(allSensorValues[0]) == int(top_target_temp))
 
-        led_gpio.output(BOTTOM_HOT_PIN, not allSensorValues[1] > bottom_target_temp)
-        led_gpio.output(BOTTOM_COLD_PIN, not allSensorValues[1] < bottom_target_temp)
-        led_gpio.output(BOTTOM_GOOD_PIN, not int(allSensorValues[1]) == int(bottom_target_temp))
+        led_gpio.output(pg.BOTTOM_HOT_PIN, not allSensorValues[1] > bottom_target_temp)
+        led_gpio.output(pg.BOTTOM_COLD_PIN, not allSensorValues[1] < bottom_target_temp)
+        led_gpio.output(pg.BOTTOM_GOOD_PIN, not int(allSensorValues[1]) == int(bottom_target_temp))
 
 class AutomaticState:
     def __init__(self):
@@ -242,37 +231,3 @@ class AutomaticState:
     def in_state(self, allSensorValues, lcd, led_gpio):
         self.auto_state = self.state_actions.perform_action(self.auto_state, allSensorValues, lcd, led_gpio)
         print "In Automatic State"
-            # if self.myTemps.__len__() == self.bufferLength:
-            #     timeArray = np.array([myTimes, np.ones(self.bufferLength)])
-            #     fitSlope, fitIntercept = np.linalg.lstsq(timeArray.T, myTemps)[0]
-            #     targetSlope = 0
-            #
-            #     if self.counter < self.rampup_time:
-            #         targetSlope = get_target_slope(self.initialTemp, self.max_temperature, self.rampup_time)
-            #         targetIntercept = self.initialTemp
-            #     else:
-            #         targetIntercept = self.max_temperature
-            #
-            #     futureTime = self.counter + 15
-            #     yError = (targetSlope * futureTime + targetIntercept) - (fitSlope * futureTime + fitIntercept)
-            #
-            #
-            #     if yError > 0.25:  # increase dutyCycle if we're below target temp
-            #         dutyCycle = min(dutyCycle + 0.1, 1.0)
-            #     elif yError < -0.25:
-            #         dutyCycle = max(dutyCycle - 0.1, 0.0)
-            #
-            #
-            #     print('---------------------------------------------------')
-            #     print('Least Squares Values: m={0:0.3F}\tb={1:0.3F}\tyError={2:0.3F}\tNewDutyCycle={3:0.2F}'.format(
-            #         fitSlope, fitIntercept, yError, dutyCycle))
-            #     print('---------------------------------------------------')
-            #     # with open("fit{0}.txt".format("-s1" if args['sensor'] == '1' else "-s2"), "a") as myFile:
-            #     #     myFile.write('{0:0.3F}\t{1:0.3F}\t{2:0.3F}\t{3:0.2F}\n'.format(fitSlope, fitIntercept, yError, dutyCycle))
-            #     self.storedTimes += myTimes
-            #     self.storedTemps += myTemps
-            #     myTemps = []
-            #     myTimes = []
-            #
-            # print('Thermocouple Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(self.temp, Utilities.c_to_f(self.temp)))
-            # #    print('    Internal Temperature: {0:0.3F}*C / {1:0.3F}*F'.format(internal2, c_to_f(internal2)))

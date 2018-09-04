@@ -77,10 +77,8 @@ def setup_pins():
         for i in range(0, 16):
             led_gpio.setup(i, GPIO.OUT)
             led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
-        for i in range(0, 16):
-            led_gpio.output(i, GPIO.LOW)  # True is HIGH is OFF, False is LOW is ON
-            #print "PIN: " + str(i)
-            #raw_input("Press Any Key")
+
+        led_gpio.output(pg.POWER_PIN, GPIO.LOW)
 
         #digital input pins
         digital_gpio = MCP.MCP23017(0x21, busnum=1)
@@ -110,8 +108,8 @@ def setup_pins():
 # 15	Blanket 1 switch right
 
 def update_input_values(digital_input_values):
-    pg.start_button = not digital_input_values[4]
-    pg.stop_button = not digital_input_values[5]
+    pg.start_button = not digital_input_values[5]
+    pg.stop_button = not digital_input_values[4]
     pg.manual_mode = not digital_input_values[7]
     pg.auto_mode = digital_input_values[6] and digital_input_values[7]
     pg.config_mode = not digital_input_values[6]
@@ -152,15 +150,16 @@ def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
 def is_there_a_sensor_problem(allSensorValues):
     #if either temperature sensor is too hot
     #come back and check pressure value (#3 here)
-    return allSensorValues[0] > 85 or allSensorValues[1] > 85 or allSensorValues[2][0] > 900
+    return allSensorValues[0] > 85 or allSensorValues[1] > 85 or allSensorValues[2][1] > 900
 
-def set_power_leds():
+def set_power_leds(allSensorValues):
     led_gpio.output(9, not pg.top_heat_blanket_on)
     led_gpio.output(12,not  pg.bottom_heat_blanket_on)
     led_gpio.output(2, not pg.intake_solenoid_on)
     led_gpio.output(3, not pg.exhaust_solenoid_on)
-    #led_gpio.output(POWER_PIN, False)
-    #led_gpio.output(PRESSURIZED_PIN, not is_system_pressurized())
+    led_gpio.output(pg.POWER_PIN, False)
+    led_gpio.output(pg.PRESSURIZED_PIN, not allSensorValues[2][1] > 100)
+    led_gpio.output(pg.AUX_1_PIN, not(allSensorValues[0] > 30 or allSensorValues[1] > 30))
 
 def set_relays():
     digital_input_values.output(0, pg.top_heat_blanket_on)
@@ -225,7 +224,7 @@ while keepGoing:
         else:
             currentStateObject.in_state(allSensorValues, lcd, led_gpio)
 
-        set_power_leds()
+        set_power_leds(allSensorValues)
         set_relays()
 
 
@@ -233,3 +232,4 @@ while keepGoing:
         print(e)
         keepGoing = False
         lcd.message("Fatal Error.")
+        led_gpio.output(pg.ERROR_PIN, GPIO.LOW)
