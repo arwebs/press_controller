@@ -23,9 +23,9 @@ def init():
     exhaust_solenoid_off = False
     exhaust_solenoid_auto = True
     exhaust_solenoid_on = False
-    total_run_duration = 40.
-    top_rampup_time = 20.
-    bottom_rampup_time = 20.
+    total_run_duration = 40. * 60.
+    top_rampup_time = 20 * 60.
+    bottom_rampup_time = 20. * 60.
     top_max_temp = 80.
     bottom_max_temp = 80.
     target_pressure = 80

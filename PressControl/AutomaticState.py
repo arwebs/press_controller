@@ -128,8 +128,8 @@ class AutomaticStateActions:
         pg.bottom_heat_blanket_on = not pg.bottom_heat_blanket_off and (((self.bottom_duty_cycle * self.buffer_length) > self.counter) or pg.bottom_heat_blanket_on)
 
         lcd.message("Time:" + str(timedelta(seconds=int(time.time() - self.start_time))) + " P:" + str(allSensorValues[2][1]) +
-            "\nBotA:" + str(allSensorValues[1]) + " BotT: " + str(bottom_target_temp) +
-            "\nTopA:" + str(allSensorValues[0]) + " TopT: " + str(top_target_temp) +
+            "\nTopA:" + str('{0:.1f}'.format(allSensorValues[0])) + " TopT:" + str('{0:.1f}'.format(top_target_temp)) +
+            "\nBotA:" + str('{0:.1f}'.format(allSensorValues[1])) + " BotT:" + str('{0:.1f}'.format(bottom_target_temp)) +
             "\nTopDC:" + str(self.top_duty_cycle) + " BotDC:" + str(self.bottom_duty_cycle))
 
         elapsed_time = time.time() - self.start_time
