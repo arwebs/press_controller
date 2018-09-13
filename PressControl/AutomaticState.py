@@ -48,10 +48,16 @@ class AutomaticStateActions:
 
         return auto_state
 
+    def reset_pins(self, led_gpio):
+        pins_to_reset = [pg.TOP_HOT_PIN, pg.TOP_COLD_PIN, pg.TOP_GOOD_PIN, pg.BOTTOM_HOT_PIN, pg.BOTTOM_COLD_PIN, pg.BOTTOM_GOOD_PIN, pg.RUN_IN_PROGRESS_PIN]
+        for pin in pins_to_reset:
+            led_gpio.output(pin, True)  # True is HIGH is OFF, False is LOW is ON
+
+
     def prepare_for_run(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
         lcd.message("Press Green button\nto start run")
-
+        self.reset_pins(led_gpio)
         # set run parameters
 
         if pg.start_button:
@@ -81,11 +87,7 @@ class AutomaticStateActions:
     def do_run(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
         if pg.stop_button:
-            pg.intake_solenoid_on = False
-            pg.exhaust_solenoid_on = True
-            pg.top_heat_blanket_on = False
-            pg.bottom_heat_blanket_on = False
-            return AutoStates.Aborted
+            return AutoStates.Error
 
         #unless being overridden, keep the intake solenoid on for the duration of the run
         pg.intake_solenoid_on = not pg.intake_solenoid_off
@@ -128,8 +130,8 @@ class AutomaticStateActions:
         pg.bottom_heat_blanket_on = not pg.bottom_heat_blanket_off and (((self.bottom_duty_cycle * self.buffer_length) > self.counter) or pg.bottom_heat_blanket_on)
 
         lcd.message("Time:" + str(timedelta(seconds=int(time.time() - self.start_time))) + " P:" + str(allSensorValues[2][1]) +
-            "\nTopA:" + str('{0:.1f}'.format(allSensorValues[0])) + " TopT:" + str('{0:.1f}'.format(top_target_temp)) +
-            "\nBotA:" + str('{0:.1f}'.format(allSensorValues[1])) + " BotT:" + str('{0:.1f}'.format(bottom_target_temp)) +
+            "\nTopA:" + '{0:.1f}'.format(allSensorValues[0]) + " TopT:" + '{0:.1f}'.format(top_target_temp) +
+            "\nBotA:" + '{0:.1f}'.format(allSensorValues[1]) + " BotT:" + '{0:.1f}'.format(bottom_target_temp) +
             "\nTopDC:" + str(self.top_duty_cycle) + " BotDC:" + str(self.bottom_duty_cycle))
 
         elapsed_time = time.time() - self.start_time
@@ -144,25 +146,37 @@ class AutomaticStateActions:
         if pg.start_button:
             return AutoStates.Entering
         lcd.clear()
-        lcd.message("Run finished.\n\nPress green button to reset.")
-        pins_to_reset = [pg.TOP_HOT_PIN, pg.TOP_COLD_PIN, pg.TOP_GOOD_PIN, pg.BOTTOM_HOT_PIN, pg.BOTTOM_COLD_PIN, pg.BOTTOM_GOOD_PIN, pg.RUN_IN_PROGRESS_PIN]
-        for pin in pins_to_reset:
-            led_gpio.output(pin, True)  # True is HIGH is OFF, False is LOW is ON
+        lcd.message("Run finished.\nPress green button\nto reset.")
+        self.reset_pins(led_gpio)
         if allSensorValues[2][1] > 700:
             pg.exhaust_solenoid_on = not pg.exhaust_solenoid_off
         return AutoStates.Finished
 
     def error(self, allSensorValues, lcd, led_gpio):
+        pg.intake_solenoid_on = False
+        pg.exhaust_solenoid_on = True
+        pg.top_heat_blanket_on = False
+        pg.bottom_heat_blanket_on = False
+        led_gpio.output(pg.ERROR_PIN, False)
+        lcd.clear()
+        lcd.message("operation cancelled.\nTop Temp: " + '{0:.1f}'.format(allSensorValues[0]) +
+                        "\nBot Temp: " + '{0:.1f}'.format(allSensorValues[1]) +
+                        "\nPressure:" +  '{0:.1f}'.format(allSensorValues[2][3]/10.))
         # turn on error light
         # turn off relays except if over-pressurized, then let off extra pressure
         # await start button for reset
+        self.reset_pins(led_gpio)
         if pg.start_button:
+            led_gpio.output(pg.ERROR_PIN, True)
             return AutoStates.Entering
         return AutoStates.Error
 
     def abort(self, allSensorValues = None, lcd = None, led_gpio = None):
-        # turn off relays
-        # reset lights
+        pg.intake_solenoid_on = False
+        pg.exhaust_solenoid_on = True
+        pg.top_heat_blanket_on = False
+        pg.bottom_heat_blanket_on = False
+
         # close run data
         # confirm if system is pressurized
             # otherwise await depressurization
