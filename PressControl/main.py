@@ -186,9 +186,9 @@ inputProblem = False
 (sensor, sensor2, analog_input_values, digital_input_values, lcd, led_gpio)= setup_pins()
 keepGoing = True
 led_gpio.output(5, GPIO.HIGH)
-
-currentStateObject = ManualState().enter()
-requestedStateObject = ManualState().enter()
+#
+currentStateObject = ManualState()
+requestedStateObject = ManualState()
 
 #instantiate our state classes once so they can persist data without going static/global
 manual_state = ManualState()
@@ -218,8 +218,8 @@ while keepGoing:
             requestedStateObject = config_state
 
         if currentStateObject != requestedStateObject:
-            if currentStateObject.exit():
-                requestedStateObject.enter()
+            if currentStateObject.exit(allSensorValues, lcd, led_gpio):
+                requestedStateObject.enter(allSensorValues, lcd, led_gpio)
                 currentStateObject = requestedStateObject
         else:
             currentStateObject.in_state(allSensorValues, lcd, led_gpio)

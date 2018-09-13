@@ -10,12 +10,13 @@ class ConfigState:
         self.config_step = 0
         pass
 
-    def enter(self):
+    def enter(self, allSensorValues, lcd, led_gpio):
         print "Entering Setup State"
         self.config_step = 0
+        lcd.set_color(1.0, 0.0, 0.0)
         return self
 
-    def exit(self):
+    def exit(self, allSensorValues, lcd, led_gpio):
         print "Exiting Setup State"
         return True
 

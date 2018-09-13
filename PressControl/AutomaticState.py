@@ -59,7 +59,7 @@ class AutomaticStateActions:
         lcd.message("Press Green button\nto start run")
         self.reset_pins(led_gpio)
         # set run parameters
-
+        lcd.set_color(0.0, 0.0, 0.0)
         if pg.start_button:
             return AutoStates.Pressurizing
         return AutoStates.Entering
@@ -67,6 +67,7 @@ class AutomaticStateActions:
     def pressurize(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
         lcd.message("Pressurizing..." + str(allSensorValues[2][1]))
+        lcd.set_color(0.0, 0.0, 1.0)
         led_gpio.output(pg.RUN_IN_PROGRESS_PIN, False)
         ## before allowing a transition to running state, set start time
 
@@ -86,6 +87,7 @@ class AutomaticStateActions:
 
     def do_run(self, allSensorValues, lcd, led_gpio):
         lcd.clear()
+        lcd.set_color(1.0, 0.0, 1.0)
         if pg.stop_button:
             return AutoStates.Error
 
@@ -146,6 +148,7 @@ class AutomaticStateActions:
         if pg.start_button:
             return AutoStates.Entering
         lcd.clear()
+        lcd.set_color(1.0, 1.0, 0.0)
         lcd.message("Run finished.\nPress green button\nto reset.")
         self.reset_pins(led_gpio)
         if allSensorValues[2][1] > 700:
@@ -159,6 +162,7 @@ class AutomaticStateActions:
         pg.bottom_heat_blanket_on = False
         led_gpio.output(pg.ERROR_PIN, False)
         lcd.clear()
+        lcd.set_color(0.0, 1.0, 1.0)
         lcd.message("operation cancelled.\nTop Temp: " + '{0:.1f}'.format(allSensorValues[0]) +
                         "\nBot Temp: " + '{0:.1f}'.format(allSensorValues[1]) +
                         "\nPressure:" +  '{0:.1f}'.format(allSensorValues[2][3]/10.))
@@ -171,16 +175,16 @@ class AutomaticStateActions:
             return AutoStates.Entering
         return AutoStates.Error
 
-    def abort(self, allSensorValues = None, lcd = None, led_gpio = None):
+    def abort(self, allSensorValues, lcd, led_gpio):
         pg.intake_solenoid_on = False
         pg.exhaust_solenoid_on = True
         pg.top_heat_blanket_on = False
         pg.bottom_heat_blanket_on = False
-
+        self.reset_pins(led_gpio)
         # close run data
         # confirm if system is pressurized
             # otherwise await depressurization
-        return True
+        return allSensorValues[2][1] < 100 # real pressure pin is [2][3]
 
     ## "private" methods...
     def determine_target_temperature(self, rampup_time, start_temperature, max_temperature):
@@ -232,15 +236,16 @@ class AutomaticState:
         self.auto_state = AutoStates.Entering
         self.state_actions = AutomaticStateActions()
 
-    def enter(self):
+    def enter(self, allSensorValues, lcd, led_gpio):
         print "Entering Automatic State"
         self.auto_state = AutoStates.Entering
         self.state_actions = AutomaticStateActions()
+        lcd.set_color(1.0, 0.0, 1.0)
         return self
 
-    def exit(self):
+    def exit(self, allSensorValues, lcd, led_gpio):
         print "Exiting Automatic State"
-        return self.state_actions.abort()
+        return self.state_actions.abort(allSensorValues, lcd, led_gpio)
 
     def in_state(self, allSensorValues, lcd, led_gpio):
         self.auto_state = self.state_actions.perform_action(self.auto_state, allSensorValues, lcd, led_gpio)
