@@ -2,7 +2,6 @@ import press_globals as pg
 import numpy as np
 import time
 import math
-import Utilities
 
 from datetime import timedelta
 from enum import Enum
@@ -31,6 +30,7 @@ class AutomaticStateActions:
         self.bottom_start_temperature = 0.
         self.counter = 0
         self.reset_in = 0
+        self.run_id = time.time()
 
     def perform_action(self, auto_state, allSensorValues, lcd, led_gpio):
         if auto_state == AutoStates.Entering:
@@ -58,9 +58,16 @@ class AutomaticStateActions:
         lcd.clear()
         lcd.message("Press Green button\nto start run")
         self.reset_pins(led_gpio)
-        # set run parameters
+
         lcd.set_color(0.0, 0.0, 0.0)
         if pg.start_button:
+            self.run_id = time.time()
+            with open('/home/pi/press_data/autorun-data-' + str(self.run_id) + '.txt', 'a') as the_file:
+                the_file.write('Automatic Run Initialized\nTarget Pressure,Rampup Time Top,Rampup Time Bottom,Total Duration,Max Temp Top,Max Temp Bottom\n' +
+                               str(pg.target_pressure) + ',' + str(pg.top_rampup_time) + ',' + str(pg.bottom_rampup_time) +
+                               ',' + str(pg.total_run_duration) + ',' + str(pg.top_max_temp) + ',' + str(pg.bottom_max_temp) + '\n' +
+                               'Initial Temperature Top,Initial Temperature Bottom\n' + str(allSensorValues[0]) + ',' + str(allSensorValues[1]) +
+                               '\nTime,Pressure,Top Temperature,Bottom Temperature,Top Target Temperature,Bottom Target Temperature,Top Blanket On,Bottom Blanket On,Top Duty Cycle,Bottom Duty Cycle\n')
             return AutoStates.Pressurizing
         return AutoStates.Entering
 
@@ -146,6 +153,12 @@ class AutomaticStateActions:
             pg.bottom_heat_blanket_on = False
             return AutoStates.Finished
 
+        with open('/home/pi/press_data/autorun-data-' + str(self.run_id) + '.txt', 'a') as the_file:
+            the_file.write(
+                '\n' + str(time.time()) +',' + str(allSensorValues[2][3]/10) +',' +str(allSensorValues[0]) +',' + str(allSensorValues[1]) +',' +
+                str(top_target_temp) +',' + str(bottom_target_temp) +',' + str(pg.top_heat_blanket_on) +',' + str(pg.bottom_heat_blanket_on) +',' +
+                str(self.top_duty_cycle) + ',' +str(self.bottom_duty_cycle))
+
         return AutoStates.Running
 
     def finish(self, allSensorValues, lcd, led_gpio):
@@ -155,6 +168,10 @@ class AutomaticStateActions:
         lcd.set_color(1.0, 1.0, 0.0)
         lcd.message("Run finished.\nPress green button\nto reset.")
         self.reset_pins(led_gpio)
+
+        with open('/home/pi/press_data/autorun-data-' + str(self.run_id) + '.txt', 'a') as the_file:
+            the_file.write('\n-----Run Finished-----')
+
         if allSensorValues[2][1] > 700:
             pg.exhaust_solenoid_on = not pg.exhaust_solenoid_off
         return AutoStates.Finished
