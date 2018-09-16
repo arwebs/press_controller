@@ -56,8 +56,8 @@ def setup_pins():
 
     try:
         #temperature sensors
-        sensor = MAX31855.MAX31855(clk, cs_sensor_1, data_out)
-        sensor2 = MAX31855.MAX31855(clk, cs_sensor_2, data_out)
+        sensor_setup = MAX31855.MAX31855(clk=clk, cs=cs_sensor_1, do=data_out)
+        sensor2_setup = MAX31855.MAX31855(clk=clk, cs=cs_sensor_2, do=data_out)
         #analog sensors (POTS & pressure sensor)
         analog_sensors = Adafruit_MCP3008.MCP3008(clk=clk, cs=cs_analog, miso=data_out, mosi=data_in)
 
@@ -89,7 +89,7 @@ def setup_pins():
             digital_gpio.setup(i, GPIO.IN)
             digital_gpio.pullup(i, True)
 
-        return [sensor, sensor2, analog_sensors, digital_gpio, lcd, led_gpio]
+        return [sensor_setup, sensor2_setup, analog_sensors, digital_gpio, lcd, led_gpio]
     except Exception as e:
         print(e)
         print 'Could not reach temperature sensors or analog sensor.'
@@ -130,6 +130,7 @@ def get_sensor_values(sensor, sensor2, analogSensors, digitalSensors):
     print "Checking Sensors."
     GPIO.output(22, True)
     temp = sensor.readTempC()
+    print sensor.readState()
     GPIO.output(22, False)
     GPIO.output(27, True)
     temp1 = sensor2.readTempC()
@@ -172,10 +173,10 @@ def gracefulShutdown():
     print "Graceful Shutdown initialized"
     for i in range(0, 16):
         led_gpio.output(i, GPIO.HIGH)  # True is HIGH is OFF, False is LOW is ON
-    #led_gpio.output(5, GPIO.LOW)
+    led_gpio.output(5, GPIO.LOW)
     lcd.clear()
     lcd.set_color(1,1,1)
-    currentStateObject.exit()
+    currentStateObject.exit(allSensorValues, lcd, led_gpio)
     #turn off relays
     for i in range(0,4):
         digital_input_values.output(i, GPIO.LOW)

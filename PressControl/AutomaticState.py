@@ -1,6 +1,7 @@
 import press_globals as pg
 import numpy as np
 import time
+import math
 import Utilities
 
 from datetime import timedelta
@@ -29,8 +30,7 @@ class AutomaticStateActions:
         self.top_start_temperature = 0.
         self.bottom_start_temperature = 0.
         self.counter = 0
-
-        pass
+        self.reset_in = 0
 
     def perform_action(self, auto_state, allSensorValues, lcd, led_gpio):
         if auto_state == AutoStates.Entering:
@@ -95,9 +95,13 @@ class AutomaticStateActions:
         pg.intake_solenoid_on = not pg.intake_solenoid_off
 
         #fill buffer of temperatures
-        self.top_blanket_temperatures.append(allSensorValues[0])
-        self.bottom_blanket_temperatures.append(allSensorValues[1])
-
+        if math.isnan(allSensorValues[0]) or math.isnan(allSensorValues[1]):
+            self.reset_in = 10
+        else:
+            self.top_blanket_temperatures.append(allSensorValues[0])
+            self.bottom_blanket_temperatures.append(allSensorValues[1])
+        self.reset_in = self.reset_in - 1
+        led_gpio.output(pg.ERROR_PIN, self.reset_in <= 0)
         #if the buffer is full, calculate duty cycle
         if len(self.top_blanket_temperatures) >= self.buffer_length:
             self.top_duty_cycle = self.top_duty_cycle +\
@@ -106,8 +110,8 @@ class AutomaticStateActions:
                                      self.determine_blanket_desired_duty_cycle(pg.bottom_rampup_time, self.bottom_blanket_temperatures, self.bottom_start_temperature, pg.bottom_max_temp)
 
             # constrain duty cycles to 0-100%
-            self.top_duty_cycle = max(0, min(1, self.top_duty_cycle))
-            self.bottom_duty_cycle = max(0, min(1, self.bottom_duty_cycle))
+            self.top_duty_cycle = max(0., min(1., self.top_duty_cycle))
+            self.bottom_duty_cycle = max(0., min(1., self.bottom_duty_cycle))
 
             #clear out buffers
             self.top_blanket_temperatures = []
@@ -223,13 +227,16 @@ class AutomaticStateActions:
 
     def set_temp_indicator_leds(self, allSensorValues, top_target_temp, bottom_target_temp, led_gpio):
         # must set pin #s
-        led_gpio.output(pg.TOP_HOT_PIN, not allSensorValues[0] > top_target_temp)
-        led_gpio.output(pg.TOP_COLD_PIN, not allSensorValues[0] < top_target_temp)
-        led_gpio.output(pg.TOP_GOOD_PIN, not int(allSensorValues[0]) == int(top_target_temp))
+        if not math.isnan(allSensorValues[0]):
+            led_gpio.output(pg.TOP_HOT_PIN, not allSensorValues[0] > top_target_temp)
+            led_gpio.output(pg.TOP_COLD_PIN, not allSensorValues[0] < top_target_temp)
+            led_gpio.output(pg.TOP_GOOD_PIN, not int(allSensorValues[0]) == int(top_target_temp))
 
-        led_gpio.output(pg.BOTTOM_HOT_PIN, not allSensorValues[1] > bottom_target_temp)
-        led_gpio.output(pg.BOTTOM_COLD_PIN, not allSensorValues[1] < bottom_target_temp)
-        led_gpio.output(pg.BOTTOM_GOOD_PIN, not int(allSensorValues[1]) == int(bottom_target_temp))
+        if not math.isnan(allSensorValues[1]):
+            led_gpio.output(pg.BOTTOM_HOT_PIN, not allSensorValues[1] > bottom_target_temp)
+            led_gpio.output(pg.BOTTOM_COLD_PIN, not allSensorValues[1] < bottom_target_temp)
+            led_gpio.output(pg.BOTTOM_GOOD_PIN, not int(allSensorValues[1]) == int(bottom_target_temp))
+
 
 class AutomaticState:
     def __init__(self):
