@@ -1,0 +1,70 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+        }
+
+        canvas {
+            border: 1px solid #9C9898;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"></script>
+    <script
+            src="https://code.jquery.com/jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+            crossorigin="anonymous"></script>
+</head>
+<body>
+<canvas id="myChart" width="400" height="400"></canvas>
+<script>
+    $(document).ready(function () {
+
+    });
+</script>
+<script>
+
+    var ctx = document.getElementById("myChart").getContext("2d");
+
+    var myNewChart = new Chart(ctx, {
+        type: 'line',
+        data: [],
+        options: {}
+    });
+
+    var socket = new WebSocket("ws://192.168.0.19:8080/ws");
+
+    socket.onopen = function () {
+        console.log("connected");
+    };
+
+    socket.onmessage = function (message) {
+        //console.log("receiving: " + message.data);
+        $("#container").append("<div>" + message.data + "</div>");
+        var data = JSON.parse(message.data);
+        addData(myNewChart, data.time, {x:data.time, y:data.top_temp});
+    };
+
+    socket.onclose = function () {
+        console.log("disconnected");
+    };
+
+    sendMessage = function (message) {
+        socket.send(message);
+    };
+
+    function addData(chart, label, data) {
+        //chart.data.labels.push(label);
+        chart.data.datasets.forEach((dataset) => {
+            dataset.data.push(data);
+        });
+        chart.update();
+    }
+
+</script>
+
+<div id="container"></div>
+</body>
+</html>

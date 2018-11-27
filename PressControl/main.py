@@ -14,6 +14,15 @@ from AutomaticState import AutomaticState
 from ConfigState import ConfigState
 from ManualState import ManualState
 
+import tornado.httpserver
+import tornado.ioloop
+import tornado.web
+import tornado.websocket
+import tornado.gen
+from tornado.options import define, options
+
+import multiprocessing
+import json
 # initialize global variables
 pg.init()
 
@@ -176,7 +185,7 @@ def gracefulShutdown():
     led_gpio.output(5, GPIO.LOW)
     lcd.clear()
     lcd.set_color(1,1,1)
-    currentStateObject.exit(allSensorValues, lcd, led_gpio)
+    #currentStateObject.exit(allSensorValues, lcd, led_gpio) # need to find these
     #turn off relays
     for i in range(0,4):
         digital_input_values.output(i, GPIO.LOW)
@@ -187,50 +196,136 @@ inputProblem = False
 (sensor, sensor2, analog_input_values, digital_input_values, lcd, led_gpio)= setup_pins()
 keepGoing = True
 led_gpio.output(5, GPIO.HIGH)
-#
-currentStateObject = ManualState()
-requestedStateObject = ManualState()
 
-#instantiate our state classes once so they can persist data without going static/global
+define("port", default=8080, help="run on the given port", type=int)
+
+clients = []
+class IndexHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.render('index.html')
+
+class WebSocketHandler(tornado.websocket.WebSocketHandler):
+    def open(self):
+        print 'new connection'
+        clients.append(self)
+        self.write_message("connected")
+
+    def on_message(self, message):
+        print 'tornado received from client: %s' % message
+        self.write_message('got it!')
+        q = self.application.settings.get('queue')
+        q.put(message)
+
+    def on_close(self):
+        print 'connection closed'
+        clients.remove(self)
+
+# instantiate our state classes once so they can persist data without going static/global
 manual_state = ManualState()
 automatic_state = AutomaticState()
 config_state = ConfigState()
 
-while keepGoing:
-    try:
-        time.sleep(1.0)
-        print(chr(27) + "[2J") # clears console
-        allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
-        print allSensorValues[0]
-        print allSensorValues[1]
-        print allSensorValues[2]
-        print allSensorValues[3]
-        if is_there_a_sensor_problem(allSensorValues):
-            # TODO...
-            pass
+class SerialProcess(multiprocessing.Process):
 
-        update_input_values(allSensorValues[3])
+    def __init__(self, taskQ, resultQ):
+        multiprocessing.Process.__init__(self)
+        self.taskQ = taskQ
+        self.resultQ = resultQ
+        self.keepGoing = True
+        self.currentStateObject = ManualState()
+        self.requestedStateObject = ManualState()
 
-        if pg.manual_mode:
-            requestedStateObject = manual_state
-        if pg.auto_mode:
-            requestedStateObject = automatic_state
-        if pg.config_mode:
-            requestedStateObject = config_state
+    def close(self):
+        pass
 
-        if currentStateObject != requestedStateObject:
-            if currentStateObject.exit(allSensorValues, lcd, led_gpio):
-                requestedStateObject.enter(allSensorValues, lcd, led_gpio)
-                currentStateObject = requestedStateObject
-        else:
-            currentStateObject.in_state(allSensorValues, lcd, led_gpio)
+    def run(self):
+        start_time = time.time()
+        while self.keepGoing:
+            try:
+                if not self.taskQ.empty():
+                    task = self.taskQ.get()
+                    print "incoming message: " + task
+                time.sleep(1.0)
+                print(chr(27) + "[2J") # clears console
+                allSensorValues = get_sensor_values(sensor, sensor2, analog_input_values, digital_input_values)
+                print allSensorValues[0]
+                print allSensorValues[1]
+                print allSensorValues[2]
+                print allSensorValues[3]
+                if is_there_a_sensor_problem(allSensorValues):
+                    # TODO...
+                    pass
 
-        set_power_leds(allSensorValues)
-        set_relays()
+                update_input_values(allSensorValues[3])
+
+                if pg.manual_mode:
+                    self.requestedStateObject = manual_state
+                if pg.auto_mode:
+                    self.requestedStateObject = automatic_state
+                if pg.config_mode:
+                    self.requestedStateObject = config_state
+
+                if self.currentStateObject != self.requestedStateObject:
+                    if self.currentStateObject.exit(allSensorValues, lcd, led_gpio):
+                        self.requestedStateObject.enter(allSensorValues, lcd, led_gpio)
+                        self.currentStateObject = self.requestedStateObject
+                else:
+                    self.currentStateObject.in_state(allSensorValues, lcd, led_gpio)
+
+                set_power_leds(allSensorValues)
+                set_relays()
+                self.resultQ.put({ "time": time.time() - start_time,
+                                            "top_temp":allSensorValues[0],
+                                            "bottom_temp":allSensorValues[1],
+                                            "pressure":allSensorValues[2][3]/10.})
+
+            except Exception as e:
+                print(e)
+                self.keepGoing = False
+                lcd.message("Fatal Error.")
+                led_gpio.output(pg.ERROR_PIN, GPIO.LOW)
 
 
-    except Exception as e:
-        print(e)
-        keepGoing = False
-        lcd.message("Fatal Error.")
-        led_gpio.output(pg.ERROR_PIN, GPIO.LOW)
+
+
+
+
+################################ MAIN ################################
+
+def main():
+    taskQ = multiprocessing.Queue()
+    resultQ = multiprocessing.Queue()
+
+    sp = SerialProcess(taskQ, resultQ)
+    sp.daemon = True
+    sp.start()
+
+    # wait a second before sending first task
+    time.sleep(1)
+    taskQ.put("first task")
+
+    tornado.options.parse_command_line()
+    app = tornado.web.Application(
+        handlers=[
+            (r"/", IndexHandler),
+            (r"/ws", WebSocketHandler)
+        ], queue=taskQ
+    )
+    httpServer = tornado.httpserver.HTTPServer(app)
+    httpServer.listen(options.port)
+    print "Listening on port:", options.port
+
+    def checkResults():
+        if not resultQ.empty():
+            result = resultQ.get()
+            for c in clients:
+                c.write_message(result)
+
+    mainLoop = tornado.ioloop.IOLoop.instance()
+    scheduler = tornado.ioloop.PeriodicCallback(checkResults, 10, io_loop=mainLoop)
+    scheduler.start()
+    mainLoop.start()
+
+
+if __name__ == "__main__":
+    main()
