@@ -85,8 +85,8 @@ class AutomaticStateActions:
         self.top_start_temperature = allSensorValues[0]
         self.bottom_start_temperature = allSensorValues[1]
 
-        #verify which sensor value...and calibrate
-        if allSensorValues[2][1] > 700:
+        #TODO: set input to actual pressure sensor, not pot reading
+        if allSensorValues[2][1] > 400:
             return AutoStates.Running
         return AutoStates.Pressurizing
 
@@ -148,6 +148,9 @@ class AutomaticStateActions:
             "\nTopDC:" + str(self.top_duty_cycle) + " BotDC:" + str(self.bottom_duty_cycle))
 
         elapsed_time = time.time() - self.start_time
+        #TODO set a flag once max target temperature has been reached
+        #     if max temperature has not been reached and it "should have been", increment pg.total_run_duration
+
         if elapsed_time > pg.total_run_duration:
             pg.top_heat_blanket_on = False
             pg.bottom_heat_blanket_on = False
@@ -162,6 +165,8 @@ class AutomaticStateActions:
         return AutoStates.Running
 
     def finish(self, allSensorValues, lcd, led_gpio):
+        #TODO add a cool-down state between running and finished
+
         if pg.start_button:
             return AutoStates.Entering
         lcd.clear()
