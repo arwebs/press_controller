@@ -10,13 +10,10 @@ class AutoStates(Enum):
     Entering = 1
     Pressurizing = 2
     Running = 3
-    Finished = 4
-    Error = 5
-    Aborted = 6
-
-
-
-
+    CoolDown = 4
+    Finished = 5
+    Error = 6
+    Aborted = 7
 
 class AutomaticStateActions:
     def __init__(self):
@@ -31,6 +28,7 @@ class AutomaticStateActions:
         self.counter = 0
         self.reset_in = 0
         self.run_id = time.time()
+        self.temperature_achieved = False
 
     def perform_action(self, auto_state, allSensorValues, lcd, led_gpio):
         if auto_state == AutoStates.Entering:
@@ -39,6 +37,8 @@ class AutomaticStateActions:
             auto_state = self.pressurize(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Running:
             auto_state = self.do_run(allSensorValues, lcd, led_gpio)
+        elif auto_state == AutoStates.CoolDown:
+            auto_state = self.cool_down(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Finished:
             auto_state = self.finish(allSensorValues, lcd, led_gpio)
         elif auto_state == AutoStates.Error:
@@ -58,7 +58,7 @@ class AutomaticStateActions:
         lcd.clear()
         lcd.message("Press Green button\nto start run")
         self.reset_pins(led_gpio)
-
+        self.temperature_achieved = False
         lcd.set_color(0.0, 0.0, 0.0)
         if pg.start_button:
             self.run_id = time.time()
@@ -148,13 +148,17 @@ class AutomaticStateActions:
             "\nTopDC:" + str(self.top_duty_cycle) + " BotDC:" + str(self.bottom_duty_cycle))
 
         elapsed_time = time.time() - self.start_time
-        #TODO set a flag once max target temperature has been reached
-        #     if max temperature has not been reached and it "should have been", increment pg.total_run_duration
+
+        if allSensorValues[0] >= pg.top_max_temp:
+            temperature_achieved = True # once the top is up to temperature, assume the bottom is close enough
+
+        if elapsed_time > pg.top_rampup_time and not temperature_achieved:
+            pg.total_run_duration = pg.total_run_duration + 1 # Increment the total run time if we're not up to temperature yet
 
         if elapsed_time > pg.total_run_duration:
             pg.top_heat_blanket_on = False
             pg.bottom_heat_blanket_on = False
-            return AutoStates.Finished
+            return AutoStates.CoolDown
 
         with open('/home/pi/press_data/autorun-data-' + str(self.run_id) + '.txt', 'a') as the_file:
             the_file.write(
@@ -164,9 +168,17 @@ class AutomaticStateActions:
 
         return AutoStates.Running
 
-    def finish(self, allSensorValues, lcd, led_gpio):
-        #TODO add a cool-down state between running and finished
+    def cool_down(self, allSensorValues, lcd, led_gpio):
+        with open('/home/pi/press_data/autorun-data-' + str(self.run_id) + '.txt', 'a') as the_file:
+            the_file.write(
+                '\n' + str(time.time()) +',' + str(allSensorValues[2][3]/10) +','
+                +str(allSensorValues[0]) +',' + str(allSensorValues[1]) +',COOLDOWN')
+        if allSensorValues[0] < 40 or pg.start_button:
+            return AutoStates.Finished
+        return AutoStates.CoolDown
 
+
+    def finish(self, allSensorValues, lcd, led_gpio):
         if pg.start_button:
             return AutoStates.Entering
         lcd.clear()
